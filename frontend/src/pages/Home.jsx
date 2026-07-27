@@ -623,4 +623,12 @@ if (typeof document !== 'undefined') {
       line-height: 1.2;
     }
     .bannerText p {
-      color
+      color: #cbd5e1;
+      font-size: 1.05rem;
+      line-height: 1.6;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+export default Home;
