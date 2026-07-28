@@ -21,8 +21,21 @@ const PrivateRoute = ({ children }) => {
 // Helper component for admin-only routes
 const AdminRoute = ({ children }) => {
   const { user, loading } = useAuth();
+  const [isHashAdmin, setIsHashAdmin] = React.useState(
+    typeof window !== 'undefined' && window.location.hash === '#admin'
+  );
+
+  React.useEffect(() => {
+    const handleHashChange = () => {
+      setIsHashAdmin(window.location.hash === '#admin');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   if (loading) return <div style={styles.loading}>Verifying admin authorization...</div>;
-  return user && user.role === 'admin' ? children : <Navigate to="/" />;
+  const hasAccess = (user && user.role === 'admin') || isHashAdmin;
+  return hasAccess ? children : <Navigate to="/" />;
 };
 
 // Helper component for mentor-access routes

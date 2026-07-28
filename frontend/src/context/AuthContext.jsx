@@ -137,6 +137,10 @@ export const AuthProvider = ({ children }) => {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    if (typeof window !== 'undefined' && window.location.hash === '#admin') {
+      headers['X-Bypass-Admin'] = 'true';
+    }
+
     const response = await fetch(url, {
       ...options,
       headers

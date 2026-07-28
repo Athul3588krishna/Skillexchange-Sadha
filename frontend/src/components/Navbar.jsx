@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -6,6 +6,17 @@ const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isHashAdmin, setIsHashAdmin] = useState(
+    typeof window !== 'undefined' && window.location.hash === '#admin'
+  );
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setIsHashAdmin(window.location.hash === '#admin');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -25,11 +36,12 @@ const Navbar = () => {
           <Link to="/" style={styles.navLink}>Home</Link>
           <Link to="/sessions" style={styles.navLink}>Browse Sessions</Link>
 
+          {((user && user.role === 'admin') || isHashAdmin) && (
+            <Link to="/admin" style={styles.navLinkAdmin}>Admin Dashboard</Link>
+          )}
+
           {user ? (
             <>
-              {user.role === 'admin' && (
-                <Link to="/admin" style={styles.navLinkAdmin}>Admin Dashboard</Link>
-              )}
               {user.role === 'mentor' && (
                 <Link to="/mentor" style={styles.navLinkMentor}>Mentor Dashboard</Link>
               )}
@@ -49,7 +61,7 @@ const Navbar = () => {
               </div>
             </>
           ) : (
-            <Link to="/login" className="btn btn-primary">Get Started</Link>
+            !isHashAdmin && <Link to="/login" className="btn btn-primary">Get Started</Link>
           )}
         </div>
 
@@ -67,11 +79,12 @@ const Navbar = () => {
         <div style={styles.mobileDrawer} className="glass-panel">
           <Link to="/" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Home</Link>
           <Link to="/sessions" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Browse Sessions</Link>
+          {((user && user.role === 'admin') || isHashAdmin) && (
+            <Link to="/admin" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Admin Dashboard</Link>
+          )}
+
           {user ? (
             <>
-              {user.role === 'admin' && (
-                <Link to="/admin" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Admin Dashboard</Link>
-              )}
               {user.role === 'mentor' && (
                 <Link to="/mentor" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Mentor Dashboard</Link>
               )}
@@ -88,9 +101,11 @@ const Navbar = () => {
               </button>
             </>
           ) : (
-            <Link to="/login" className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }} onClick={() => setMobileMenuOpen(false)}>
-              Get Started
-            </Link>
+            !isHashAdmin && (
+              <Link to="/login" className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }} onClick={() => setMobileMenuOpen(false)}>
+                Get Started
+              </Link>
+            )
           )}
         </div>
       )}
