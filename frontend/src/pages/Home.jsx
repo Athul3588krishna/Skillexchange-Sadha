@@ -349,13 +349,14 @@ const styles = {
   searchForm: {
     display: 'flex',
     gap: '12px',
-    background: '#ffffff',
+    background: 'rgba(15, 18, 29, 0.8)',
     padding: '8px',
-    borderRadius: '12px',
-    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.06), 0 8px 10px -6px rgba(0,0,0,0.04)',
+    borderRadius: '14px',
+    boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
     border: '1px solid var(--border-glass)',
     maxWidth: '650px',
-    marginBottom: '24px'
+    marginBottom: '24px',
+    backdropFilter: 'blur(12px)'
   },
   searchInputWrapper: {
     display: 'flex',
@@ -366,7 +367,7 @@ const styles = {
   },
   searchIcon: {
     fontSize: '1.1rem',
-    color: 'var(--text-muted)'
+    color: 'var(--text-secondary)'
   },
   searchInput: {
     border: 'none',
@@ -374,7 +375,8 @@ const styles = {
     width: '100%',
     fontFamily: 'var(--font-sans)',
     fontSize: '0.95rem',
-    color: 'var(--text-primary)'
+    color: '#ffffff',
+    background: 'transparent'
   },
   searchBtn: {
     padding: '10px 24px'
@@ -386,14 +388,15 @@ const styles = {
     flexWrap: 'wrap'
   },
   trendBadge: {
-    color: 'var(--primary)',
-    background: 'var(--bg-secondary)',
+    color: '#818cf8',
+    background: 'rgba(99, 102, 241, 0.12)',
+    border: '1px solid rgba(99, 102, 241, 0.25)',
     textDecoration: 'none',
     fontSize: '0.85rem',
-    fontWeight: '500',
-    padding: '4px 12px',
+    fontWeight: '600',
+    padding: '4px 14px',
     borderRadius: '9999px',
-    transition: 'all 0.15s ease'
+    transition: 'all 0.2s ease'
   },
   heroVisual: {
     flex: '0.8',
