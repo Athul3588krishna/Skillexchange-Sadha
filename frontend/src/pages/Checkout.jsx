@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import Spinner from '../components/Spinner';
 
 const Checkout = () => {
   const { id } = useParams();
   const { authFetch } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
   const [booking, setBooking] = useState(null);
@@ -46,7 +49,7 @@ const Checkout = () => {
   const handlePayment = async (e) => {
     e.preventDefault();
     if (!cardNumber || !cardHolder || !expiry || !cvv) {
-      setMessage('❌ Please fill in all card details.');
+      setMessage('Please fill in all card details.');
       return;
     }
 
@@ -55,24 +58,19 @@ const Checkout = () => {
     try {
       const res = await authFetch(`/api/bookings/${id}/pay`, {
         method: 'POST',
-        body: JSON.stringify({
-          cardNumber,
-          cardHolder,
-          expiry,
-          cvv
-        })
+        body: JSON.stringify({ cardNumber, cardHolder, expiry, cvv })
       });
       const data = await res.json();
 
       if (data.success) {
-        alert('🎉 Simulated Payment Successful!');
+        toast.success('Payment successful! Your session is confirmed.');
         navigate('/dashboard');
       } else {
-        setMessage(`❌ Payment failed: ${data.message}`);
+        setMessage(data.message || 'Payment failed.');
       }
     } catch (err) {
       console.error(err);
-      setMessage('❌ Payment server error.');
+      setMessage('Payment server error. Please try again.');
     } finally {
       setPayLoading(false);
     }
@@ -80,8 +78,38 @@ const Checkout = () => {
 
   if (loading) {
     return (
-      <div className="container" style={{ padding: '60px 24px', textAlign: 'center', color: '#9ca3af' }}>
-        Loading checkout details...
+      <div className="container" style={{ padding: '60px 24px' }}>
+        <Spinner fullPage text="Loading checkout details..." />
+      </div>
+    );
+  }
+
+  // Already paid — show success state instead of form
+  if (booking && booking.paymentStatus === 'paid') {
+    return (
+      <div className="container" style={{ padding: '60px 24px', textAlign: 'center' }}>
+        <div className="glass-panel" style={{ padding: '56px 40px', maxWidth: '520px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+          <div style={{ fontSize: '4rem' }}>🎉</div>
+          <h2 style={{ color: 'var(--text-primary)', margin: 0 }}>Payment Confirmed!</h2>
+          <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+            You have already paid for <strong>{booking.session?.title}</strong>.
+            Your booking is <span className="badge badge-success" style={{ verticalAlign: 'middle', fontSize: '0.85rem' }}>{booking.status}</span>.
+          </p>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Link to="/dashboard" className="btn btn-primary">Go to My Dashboard</Link>
+            <Link to="/sessions" className="btn btn-outline">Browse More Sessions</Link>
+          </div>
+          <div style={{ background: 'var(--bg-secondary)', borderRadius: '10px', padding: '16px 20px', width: '100%', textAlign: 'left' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+              <span>Transaction ID:</span>
+              <strong style={{ color: 'var(--primary)', fontFamily: 'monospace' }}>{booking.paymentId || 'N/A'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              <span>Amount Paid:</span>
+              <strong style={{ color: 'var(--text-primary)' }}>${booking.amountPaid}</strong>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

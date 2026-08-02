@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import Spinner from '../components/Spinner';
 
 const BrowseSessions = () => {
-  const { user, token, authFetch } = useAuth();
+  const { user, authFetch } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -11,8 +14,8 @@ const BrowseSessions = () => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Filter States
-  const [search, setSearch] = useState('');
+  // Filter States - initialize from URL params
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const [category, setCategory] = useState(searchParams.get('category') || '');
   const [type, setType] = useState('');
 
@@ -33,6 +36,15 @@ const BrowseSessions = () => {
   useEffect(() => {
     fetchCategories();
   }, []);
+
+  // Single effect: sync URL params AND fetch sessions when params change
+  useEffect(() => {
+    const newSearch = searchParams.get('search') || '';
+    const newCategory = searchParams.get('category') || '';
+    // Only update state if URL actually changed to avoid re-triggering
+    setSearch(prev => prev !== newSearch ? newSearch : prev);
+    setCategory(prev => prev !== newCategory ? newCategory : prev);
+  }, [searchParams]);
 
   useEffect(() => {
     fetchSessions();
@@ -85,7 +97,7 @@ const BrowseSessions = () => {
 
     const time = selectedSlot === 'custom' || !selectedSlot ? customSlot : selectedSlot;
     if (!time) {
-      setBookingMessage('❌ Please specify a date and time slot.');
+      setBookingMessage('Please specify a date and time slot.');
       return;
     }
 
@@ -103,18 +115,16 @@ const BrowseSessions = () => {
       if (data.success) {
         setBookingSession(null);
         if (bookingSession.type === 'paid') {
-          // Redirect to checkout simulation
           navigate(`/checkout/${data.data._id}`);
         } else {
-          // Exchange is free
-          alert('Skill Exchange Booked! The host has been notified.');
+          toast.success('Skill Exchange booked! The host has been notified.');
           navigate('/dashboard');
         }
       } else {
-        setBookingMessage(`❌ ${data.message}`);
+        setBookingMessage(data.message);
       }
     } catch (err) {
-      setBookingMessage('❌ Booking request failed.');
+      setBookingMessage('Booking request failed. Please try again.');
     } finally {
       setBookingLoading(false);
     }
@@ -149,15 +159,15 @@ const BrowseSessions = () => {
       const data = await res.json();
 
       if (data.success) {
-        alert(`Skill Exchange proposal sent to ${exchangeTargetUser.name}!`);
+        toast.success(`Skill Exchange proposal sent to ${exchangeTargetUser.name}!`);
         setExchangeTargetUser(null);
         navigate('/dashboard');
       } else {
-        alert(`Failed: ${data.message}`);
+        toast.error(data.message || 'Failed to send proposal.');
       }
     } catch (err) {
       console.error(err);
-      alert('Error sending request.');
+      toast.error('Error sending exchange request.');
     } finally {
       setExchangeLoading(false);
     }
@@ -213,8 +223,8 @@ const BrowseSessions = () => {
 
       {/* Sessions Grid */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '60px', color: '#9ca3af' }}>
-          Loading active classes...
+        <div style={{ textAlign: 'center', padding: '80px 0' }}>
+          <Spinner text="Loading sessions..." />
         </div>
       ) : sessions.length === 0 ? (
         <div className="glass-panel" style={{ padding: '60px', textAlign: 'center', color: '#9ca3af' }}>

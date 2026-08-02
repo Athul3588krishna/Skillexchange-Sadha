@@ -1,15 +1,21 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
+import { SocketProvider } from './context/SocketContext';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
-import LoginRegister from './pages/LoginRegister';
+import PortalSelector from './pages/PortalSelector';
+import StudentAuth from './pages/StudentAuth';
+import MentorAuth from './pages/MentorAuth';
+import AdminAuth from './pages/AdminAuth';
 import BrowseSessions from './pages/BrowseSessions';
 import Profile from './pages/Profile';
 import Checkout from './pages/Checkout';
 import UserDashboard from './pages/UserDashboard';
 import MentorDashboard from './pages/MentorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import NotFound from './pages/NotFound';
 
 // Helper component for authenticated routes
 const PrivateRoute = ({ children }) => {
@@ -21,40 +27,51 @@ const PrivateRoute = ({ children }) => {
 // Helper component for admin-only routes
 const AdminRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  const [isHashAdmin, setIsHashAdmin] = React.useState(
-    typeof window !== 'undefined' && window.location.hash === '#admin'
-  );
-
-  React.useEffect(() => {
-    const handleHashChange = () => {
-      setIsHashAdmin(window.location.hash === '#admin');
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
   if (loading) return <div style={styles.loading}>Verifying admin authorization...</div>;
-  const hasAccess = (user && user.role === 'admin') || isHashAdmin;
-  return hasAccess ? children : <Navigate to="/" />;
+  return (user && user.role === 'admin') ? children : <Navigate to="/admin/login" />;
 };
 
 // Helper component for mentor-access routes
 const MentorRoute = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return <div style={styles.loading}>Verifying mentor credentials...</div>;
-  const isAuthorized = user && (user.role === 'mentor' || user.role === 'admin' || user.role === 'skilled_user');
-  return isAuthorized ? children : <Navigate to="/" />;
+  const isAuthorized = user && (user.role === 'mentor' || user.role === 'admin' || user.role === 'skilled_user' || user.mentorStatus === 'pending');
+  return isAuthorized ? children : <Navigate to="/mentor/login" />;
 };
+
+function HashRedirector() {
+  const navigate = React.useMemo(() => null, []);
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#admin') {
+      window.location.href = '/admin/login';
+    }
+    const handleHash = () => {
+      if (window.location.hash === '#admin') {
+        window.location.href = '/admin/login';
+      }
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+  return null;
+}
 
 function AppContent() {
   return (
     <Router>
+      <HashRedirector />
       <div style={styles.appContainer}>
         <Navbar />
         <main style={styles.mainContent}>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/login" element={<LoginRegister />} />
+            
+            {/* Dedicated Role Portals */}
+            <Route path="/login" element={<PortalSelector />} />
+            <Route path="/student/login" element={<StudentAuth />} />
+            <Route path="/mentor/login" element={<MentorAuth />} />
+            <Route path="/admin/login" element={<AdminAuth />} />
+
             <Route path="/sessions" element={<BrowseSessions />} />
             
             {/* Authenticated Routes */}
@@ -82,10 +99,26 @@ function AppContent() {
                 </PrivateRoute>
               } 
             />
+            <Route 
+              path="/student/dashboard" 
+              element={
+                <PrivateRoute>
+                  <UserDashboard />
+                </PrivateRoute>
+              } 
+            />
 
             {/* Role-Specific Protected Routes */}
             <Route 
               path="/mentor" 
+              element={
+                <MentorRoute>
+                  <MentorDashboard />
+                </MentorRoute>
+              } 
+            />
+            <Route 
+              path="/mentor/dashboard" 
               element={
                 <MentorRoute>
                   <MentorDashboard />
@@ -100,9 +133,17 @@ function AppContent() {
                 </AdminRoute>
               } 
             />
+            <Route 
+              path="/admin/dashboard" 
+              element={
+                <AdminRoute>
+                  <AdminDashboard />
+                </AdminRoute>
+              } 
+            />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" />} />
+            {/* Fallback – show 404 page */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
         <footer style={styles.footer}>
@@ -119,9 +160,13 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <SocketProvider>
+          <AppContent />
+        </SocketProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 

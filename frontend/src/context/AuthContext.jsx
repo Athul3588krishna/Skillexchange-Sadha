@@ -2,6 +2,16 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 
 const AuthContext = createContext(null);
 
+const safeJsonParse = async (response) => {
+  try {
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
+  } catch (err) {
+    console.warn('Safe JSON parse caught error:', err);
+    return {};
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token') || null);
@@ -18,8 +28,8 @@ export const AuthProvider = ({ children }) => {
               'Authorization': `Bearer ${token}`
             }
           });
-          const data = await res.json();
-          if (data.success) {
+          const data = await safeJsonParse(res);
+          if (data && data.success) {
             setUser(data.data);
           } else {
             // Token expired or invalid
@@ -42,16 +52,18 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ email, password })
       });
-      const data = await res.json();
-      
-      if (data.success) {
+      const data = await safeJsonParse(res);
+
+      if (data && data.success) {
         localStorage.setItem('token', data.token);
         setToken(data.token);
         setUser(data);
-        return { success: true };
+        return { success: true, role: data.role };
       } else {
         setError(data.message || 'Login failed');
         return { success: false, message: data.message };
@@ -68,12 +80,14 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify(userData)
       });
-      const data = await res.json();
+      const data = await safeJsonParse(res);
 
-      if (data.success) {
+      if (data && data.success) {
         localStorage.setItem('token', data.token);
         setToken(data.token);
         setUser(data);
@@ -107,9 +121,9 @@ export const AuthProvider = ({ children }) => {
         },
         body: JSON.stringify(profileData)
       });
-      const data = await res.json();
+      const data = await safeJsonParse(res);
 
-      if (data.success) {
+      if (data && data.success) {
         setUser(data);
         if (data.token) {
           localStorage.setItem('token', data.token);
@@ -137,10 +151,6 @@ export const AuthProvider = ({ children }) => {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    if (typeof window !== 'undefined' && window.location.hash === '#admin') {
-      headers['X-Bypass-Admin'] = 'true';
-    }
-
     const response = await fetch(url, {
       ...options,
       headers
@@ -158,6 +168,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider
       value={{
         user,
+        setUser,
         token,
         loading,
         error,

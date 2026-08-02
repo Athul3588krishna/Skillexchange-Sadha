@@ -10,7 +10,9 @@ const {
   createCategory,
   getCategories,
   deleteCategory,
-  getRecords
+  getRecords,
+  getAdminSessions,
+  deleteAdminSession
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -36,4 +38,9 @@ router.post('/mentors/:id/verify', verifyMentor);
 router.post('/categories', createCategory);
 router.delete('/categories/:id', deleteCategory);
 
+// Sessions management
+router.get('/sessions', getAdminSessions);
+router.delete('/sessions/:id', deleteAdminSession);
+
 module.exports = router;
+

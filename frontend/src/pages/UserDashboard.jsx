@@ -1,20 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import Spinner from '../components/Spinner';
+import LiveChatModal from '../components/LiveChatModal';
 
 const UserDashboard = () => {
   const { user, authFetch } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
   const [bookings, setBookings] = useState([]);
   const [exchanges, setExchanges] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [chatRecipient, setChatRecipient] = useState(null);
 
   // Review Modal States
   const [reviewBooking, setReviewBooking] = useState(null);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
+  // Track which bookings have already been reviewed
+  const [reviewedBookingIds, setReviewedBookingIds] = useState(new Set());
 
   useEffect(() => {
     fetchDashboardData();
@@ -36,6 +43,17 @@ const UserDashboard = () => {
       if (exchangeData.success) {
         setExchanges(exchangeData.data);
       }
+
+      // Fetch admin records to determine already-reviewed bookings
+      // We check via a lightweight dedicated approach - fetch all reviews the user submitted
+      const reviewRes = await authFetch('/api/bookings/my-reviews');
+      if (reviewRes.ok) {
+        const reviewData = await reviewRes.json();
+        if (reviewData.success && reviewData.data) {
+          const ids = new Set(reviewData.data.map(r => r.booking));
+          setReviewedBookingIds(ids);
+        }
+      }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
@@ -51,13 +69,14 @@ const UserDashboard = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Session marked as ${newStatus}!`);
+        toast.success(`Session marked as ${newStatus}!`);
         fetchDashboardData();
       } else {
-        alert(data.message);
+        toast.error(data.message);
       }
     } catch (err) {
       console.error(err);
+      toast.error('Failed to update booking status.');
     }
   };
 
@@ -69,13 +88,14 @@ const UserDashboard = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Exchange proposal ${newStatus}!`);
+        toast.success(`Exchange proposal ${newStatus}!`);
         fetchDashboardData();
       } else {
-        alert(data.message);
+        toast.error(data.message);
       }
     } catch (err) {
       console.error(err);
+      toast.error('Failed to update exchange request.');
     }
   };
 
@@ -98,26 +118,24 @@ const UserDashboard = () => {
       const data = await res.json();
 
       if (data.success) {
-        alert('Thank you for your rating and review!');
+        toast.success('Thank you for your rating and review!');
+        // Mark this booking as reviewed so button disappears
+        setReviewedBookingIds(prev => new Set([...prev, reviewBooking._id]));
         setReviewBooking(null);
         fetchDashboardData();
       } else {
-        alert(data.message);
+        toast.error(data.message || 'Failed to submit review.');
       }
     } catch (err) {
       console.error(err);
-      alert('Error submitting review');
+      toast.error('Error submitting review.');
     } finally {
       setReviewLoading(false);
     }
   };
 
   if (loading) {
-    return (
-      <div className="container" style={{ padding: '60px 24px', textAlign: 'center', color: '#9ca3af' }}>
-        Loading your student dashboard...
-      </div>
-    );
+    return <Spinner fullPage text="Loading your student dashboard..." />;
   }
 
   return (
@@ -187,6 +205,15 @@ const UserDashboard = () => {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px' }}>
+                        {booking.mentor && (
+                          <button 
+                            onClick={() => setChatRecipient(booking.mentor)} 
+                            className="btn btn-outline" 
+                            style={{ ...styles.actionBtn, padding: '4px 10px', fontSize: '0.8rem' }}
+                          >
+                            💬 Chat
+                          </button>
+                        )}
                         {booking.paymentStatus === 'pending' && booking.session?.type === 'paid' && (
                           <Link to={`/checkout/${booking._id}`} className="btn btn-secondary" style={styles.actionBtn}>
                             Pay Now
@@ -201,7 +228,7 @@ const UserDashboard = () => {
                             Mark Completed
                           </button>
                         )}
-                        {booking.status === 'completed' && (
+                        {booking.status === 'completed' && !reviewedBookingIds.has(booking._id) && (
                           <button 
                             onClick={() => handleOpenReview(booking)} 
                             className="btn btn-primary"
@@ -209,6 +236,9 @@ const UserDashboard = () => {
                           >
                             Review Mentor
                           </button>
+                        )}
+                        {booking.status === 'completed' && reviewedBookingIds.has(booking._id) && (
+                          <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>✓ Reviewed</span>
                         )}
                       </div>
                     </td>
@@ -356,6 +386,14 @@ const UserDashboard = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Live Chat Modal */}
+      {chatRecipient && (
+        <LiveChatModal 
+          recipient={chatRecipient} 
+          onClose={() => setChatRecipient(null)} 
+        />
       )}
     </div>
   );

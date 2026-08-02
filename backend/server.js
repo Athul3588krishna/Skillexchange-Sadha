@@ -46,8 +46,55 @@ app.use((err, req, res, next) => {
   });
 });
 
+const http = require('http');
+const { Server } = require('socket.io');
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  }
+});
+
+// Attach socket io instance to req
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+io.on('connection', (socket) => {
+  // User registers their room
+  socket.on('join_user', (userId) => {
+    if (userId) {
+      socket.join(`user_${userId}`);
+    }
+  });
+
+  // Join chat room between student and mentor
+  socket.on('join_chat', (chatId) => {
+    if (chatId) {
+      socket.join(`chat_${chatId}`);
+    }
+  });
+
+  // Live messaging
+  socket.on('send_message', (data) => {
+    // Broadcast message to everyone in the chat room
+    io.to(`chat_${data.chatId}`).emit('receive_message', data);
+    // Also notify recipient if online
+    if (data.receiverId) {
+      io.to(`user_${data.receiverId}`).emit('new_chat_notification', data);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    // handle disconnect if needed
+  });
+});
+
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Server running with Socket.io on port ${PORT}`);
 });

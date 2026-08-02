@@ -153,6 +153,7 @@ exports.updateSession = async (req, res) => {
 // @access  Private (Creator only)
 exports.deleteSession = async (req, res) => {
   try {
+    const Booking = require('../models/Booking');
     const session = await Session.findById(req.params.id);
 
     if (!session) {
@@ -164,11 +165,14 @@ exports.deleteSession = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Not authorized to delete this session' });
     }
 
+    // Cascade delete: remove all bookings tied to this session
+    await Booking.deleteMany({ session: req.params.id });
+
     await session.deleteOne();
 
     res.json({
       success: true,
-      message: 'Session removed'
+      message: 'Session and its bookings have been removed'
     });
   } catch (error) {
     console.error(error);

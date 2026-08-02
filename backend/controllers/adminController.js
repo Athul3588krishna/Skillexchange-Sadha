@@ -161,6 +161,15 @@ exports.verifyMentor = async (req, res) => {
 
     await mentor.save();
 
+    // Emit real-time Socket.io event to mentor
+    if (req.io) {
+      req.io.to(`user_${mentor._id}`).emit('mentor_status_updated', {
+        status: mentor.mentorStatus,
+        role: mentor.role,
+        message: `Your mentor status has been updated to ${mentor.mentorStatus} by the Admin!`
+      });
+    }
+
     res.json({
       success: true,
       message: `Mentor certificate ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
@@ -260,6 +269,51 @@ exports.getRecords = async (req, res) => {
         bookings,
         reviews
       }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get all sessions (admin view)
+// @route   GET /api/admin/sessions
+// @access  Private (Admin only)
+exports.getAdminSessions = async (req, res) => {
+  try {
+    const sessions = await Session.find()
+      .populate('category', 'name')
+      .populate('creator', 'name email role')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: sessions.length,
+      data: sessions
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Delete any session (admin)
+// @route   DELETE /api/admin/sessions/:id
+// @access  Private (Admin only)
+exports.deleteAdminSession = async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Session not found' });
+    }
+
+    // Cascade delete bookings
+    await Booking.deleteMany({ session: req.params.id });
+    await session.deleteOne();
+
+    res.json({
+      success: true,
+      message: 'Session and related bookings deleted'
     });
   } catch (error) {
     console.error(error);

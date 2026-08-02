@@ -4,8 +4,18 @@ import { useAuth } from '../context/AuthContext';
 
 const LoginRegister = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const { login, register, error: authError } = useAuth();
+  const { user, login, register, error: authError } = useAuth();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (user) {
+      if (user.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
+    }
+  }, [user, navigate]);
 
   // Form Fields
   const [name, setName] = useState('');
@@ -32,9 +42,10 @@ const LoginRegister = () => {
       }
       const res = await login(email, password);
       setLoading(false);
-      if (res.success) {
-        navigate('/');
+      if (!res.success) {
+        setLocalError(res.message || 'Login failed');
       }
+      // Navigation handled by useEffect above when user state updates
     } else {
       if (!name || !email || !password || !role) {
         setLocalError('Please fill in all required fields');

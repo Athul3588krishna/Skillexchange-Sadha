@@ -6,21 +6,26 @@ const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isHashAdmin, setIsHashAdmin] = useState(
-    typeof window !== 'undefined' && window.location.hash === '#admin'
-  );
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      setIsHashAdmin(window.location.hash === '#admin');
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
 
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const getRoleBadge = () => {
+    if (!user) return null;
+    if (user.role === 'admin') {
+      return <span className="badge badge-danger">🛡️ Admin</span>;
+    }
+    if (user.role === 'mentor') {
+      return user.mentorStatus === 'approved' 
+        ? <span className="badge badge-success">✅ Approved Mentor</span>
+        : <span className="badge badge-warning">⏳ Pending Mentor</span>;
+    }
+    if (user.role === 'skilled_user') {
+      return <span className="badge badge-primary">⚡ Skilled User</span>;
+    }
+    return <span className="badge badge-secondary">🎓 Student</span>;
   };
 
   return (
@@ -36,32 +41,40 @@ const Navbar = () => {
           <Link to="/" style={styles.navLink}>Home</Link>
           <Link to="/sessions" style={styles.navLink}>Browse Sessions</Link>
 
-          {((user && user.role === 'admin') || isHashAdmin) && (
+          {(user && user.role === 'admin') && (
             <Link to="/admin" style={styles.navLinkAdmin}>Admin Dashboard</Link>
           )}
 
           {user ? (
             <>
-              {user.role === 'mentor' && (
+              {(user.role === 'mentor' || user.mentorStatus === 'pending' || user.mentorStatus === 'approved') && (
                 <Link to="/mentor" style={styles.navLinkMentor}>Mentor Dashboard</Link>
               )}
+              {user.role === 'skilled_user' && (
+                <Link to="/mentor" style={styles.navLinkMentor}>Host Sessions</Link>
+              )}
               {(user.role === 'beginner' || user.role === 'skilled_user') && (
-                <Link to="/dashboard" style={styles.navLinkUser}>My Dashboard</Link>
+                <Link to="/dashboard" style={styles.navLinkUser}>Student Dashboard</Link>
               )}
               <Link to="/profile" style={styles.navLink}>Profile</Link>
+
               <div style={styles.userInfo}>
-                <span style={styles.userBadge} className={`badge badge-${
-                  user.role === 'admin' ? 'danger' : user.role === 'mentor' ? 'primary' : 'secondary'
-                }`}>
-                  {user.role.replace('_', ' ')}
-                </span>
+                {getRoleBadge()}
                 <button onClick={handleLogout} className="btn btn-outline" style={styles.logoutBtn}>
                   Logout
                 </button>
               </div>
             </>
           ) : (
-            !isHashAdmin && <Link to="/login" className="btn btn-primary">Get Started</Link>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <Link to="/student/login" style={styles.navLink}>Student Sign In</Link>
+              <Link to="/mentor/login" className="btn btn-outline" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+                Become a Mentor
+              </Link>
+              <Link to="/admin/login" style={{ ...styles.navLink, color: 'var(--danger)', fontSize: '0.85rem' }}>
+                Admin Portal
+              </Link>
+            </div>
           )}
         </div>
 
@@ -85,11 +98,14 @@ const Navbar = () => {
 
           {user ? (
             <>
-              {user.role === 'mentor' && (
+              {(user.role === 'mentor' || user.mentorStatus === 'pending' || user.mentorStatus === 'approved') && (
                 <Link to="/mentor" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Mentor Dashboard</Link>
               )}
+              {user.role === 'skilled_user' && (
+                <Link to="/mentor" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Host Sessions</Link>
+              )}
               {(user.role === 'beginner' || user.role === 'skilled_user') && (
-                <Link to="/dashboard" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>My Dashboard</Link>
+                <Link to="/dashboard" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Student Dashboard</Link>
               )}
               <Link to="/profile" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Profile</Link>
               <button 
@@ -102,9 +118,13 @@ const Navbar = () => {
             </>
           ) : (
             !isHashAdmin && (
-              <Link to="/login" className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }} onClick={() => setMobileMenuOpen(false)}>
-                Get Started
-              </Link>
+              <>
+                <Link to="/student/login" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Student Sign In</Link>
+                <Link to="/mentor/login" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Become a Mentor</Link>
+                <Link to="/login" className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }} onClick={() => setMobileMenuOpen(false)}>
+                  Get Started
+                </Link>
+              </>
             )
           )}
         </div>
@@ -147,10 +167,7 @@ const styles = {
   menu: {
     display: 'flex',
     alignItems: 'center',
-    gap: '24px',
-    '@media (max-width: 768px)': {
-      display: 'none'
-    }
+    gap: '24px'
   },
   navLink: {
     color: 'var(--text-secondary)',
@@ -185,9 +202,6 @@ const styles = {
     borderLeft: '1px solid var(--border-glass)',
     paddingLeft: '20px'
   },
-  userBadge: {
-    fontSize: '0.7rem'
-  },
   logoutBtn: {
     padding: '8px 16px',
     fontSize: '0.85rem'
@@ -198,10 +212,7 @@ const styles = {
     color: 'var(--text-primary)',
     fontSize: '1.5rem',
     cursor: 'pointer',
-    display: 'none',
-    '@media (max-width: 768px)': {
-      display: 'block'
-    }
+    display: 'none'
   },
   mobileDrawer: {
     position: 'absolute',
@@ -223,21 +234,5 @@ const styles = {
     borderBottom: '1px solid var(--border-glass)'
   }
 };
-
-// Add responsive media query support hack via inject style
-if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.innerHTML = `
-    @media (max-width: 768px) {
-      .glass-nav div[style*="display: flex"][style*="gap: 24px"] {
-        display: none !important;
-      }
-      .glass-nav button[style*="display: none"] {
-        display: block !important;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-}
 
 export default Navbar;

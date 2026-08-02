@@ -1,15 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import Spinner from '../components/Spinner';
+import LiveChatModal from '../components/LiveChatModal';
 
 const MentorDashboard = () => {
   const { user, authFetch } = useAuth();
+  const toast = useToast();
   
   const [sessions, setSessions] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [receivedReviews, setReceivedReviews] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [chatRecipient, setChatRecipient] = useState(null);
   
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
 
   // New Session Form States
   const [title, setTitle] = useState('');
@@ -37,22 +44,32 @@ const MentorDashboard = () => {
         if (catData.data.length > 0) setCategory(catData.data[0]._id);
       }
 
-      // 2. Fetch my hosted bookings
-      const bookingRes = await authFetch('/api/bookings?as=mentor');
-      const bookingData = await bookingRes.json();
-      if (bookingData.success) {
-        setBookings(bookingData.data);
-      }
+      // 2. Fetch my hosted bookings, sessions, and reviews
+      const [sessRes, bookRes, reviewRes] = await Promise.all([
+        authFetch('/api/sessions'),
+        authFetch('/api/bookings?as=mentor'),
+        authFetch('/api/bookings/mentor-reviews'),
+      ]);
 
-      // 3. Fetch all sessions (and filter by current user as creator)
-      const sessionRes = await fetch('/api/sessions');
-      const sessionData = await sessionRes.json();
-      if (sessionData.success) {
-        const mySessions = sessionData.data.filter(s => s.creator?._id === user._id);
+      const [sessData, bookData, reviewData] = await Promise.all([
+        sessRes.json(),
+        bookRes.json(),
+        reviewRes.json(),
+      ]);
+
+      if (sessData.success) {
+        const mySessions = sessData.data.filter(s => s.creator?._id === user._id || s.creator === user._id);
         setSessions(mySessions);
       }
+      if (bookData.success) {
+        const myBookings = bookData.data.filter(b => b.mentor?._id === user._id || b.mentor === user._id);
+        setBookings(myBookings);
+      }
+      if (reviewData.success) {
+        setReceivedReviews(reviewData.data);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Dashboard fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -87,12 +104,12 @@ const MentorDashboard = () => {
 
       if (data.success) {
         setModalOpen(false);
-        // Reset form
         setTitle('');
         setDescription('');
         setPrice(25);
         setSlots('Monday 10:00 AM, Wednesday 3:00 PM');
         fetchDashboardData();
+        toast.success('Session created successfully!');
       } else {
         setFormError(data.message || 'Failed to create session');
       }
@@ -111,13 +128,31 @@ const MentorDashboard = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Booking status updated to ${actionStatus}!`);
+        toast.success(`Booking ${actionStatus}!`);
         fetchDashboardData();
       } else {
-        alert(data.message);
+        toast.error(data.message);
       }
     } catch (err) {
       console.error(err);
+      toast.error('Failed to update booking.');
+    }
+  };
+
+  const handleDeleteSession = async (sessionId) => {
+    if (!window.confirm('Are you sure you want to delete this session? This cannot be undone.')) return;
+    try {
+      const res = await authFetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Session and its bookings have been removed.');
+        fetchDashboardData();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete session.');
     }
   };
 
@@ -127,11 +162,7 @@ const MentorDashboard = () => {
     .reduce((acc, current) => acc + (current.amountPaid || 0), 0);
 
   if (loading) {
-    return (
-      <div className="container" style={{ padding: '60px 24px', textAlign: 'center', color: '#9ca3af' }}>
-        Loading mentor dashboard...
-      </div>
-    );
+    return <Spinner fullPage text="Loading mentor dashboard..." />;
   }
 
   // Double check if role is correct or if they are blocked by verification
@@ -188,6 +219,15 @@ const MentorDashboard = () => {
           <div style={styles.statValue}>{bookings.length}</div>
           <div style={styles.statLabel}>Reservations total</div>
         </div>
+        <div className="glass-panel" style={styles.statBox}>
+          <div style={styles.statTitle}>Rating</div>
+          <div style={styles.statValue}>
+            {receivedReviews.length > 0
+              ? (receivedReviews.reduce((sum, r) => sum + r.rating, 0) / receivedReviews.length).toFixed(1)
+              : '–'}
+          </div>
+          <div style={styles.statLabel}>Avg from {receivedReviews.length} review{receivedReviews.length !== 1 ? 's' : ''}</div>
+        </div>
       </div>
 
       {/* Bookings Section */}
@@ -236,33 +276,44 @@ const MentorDashboard = () => {
                       </span>
                     </td>
                     <td>
-                      {booking.status === 'pending' && (
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {booking.learner && (
                           <button 
-                            onClick={() => handleBookingAction(booking._id, 'approved')} 
-                            className="btn btn-secondary" 
-                            style={styles.actionBtn}
+                            onClick={() => setChatRecipient(booking.learner)} 
+                            className="btn btn-outline" 
+                            style={{ ...styles.actionBtn, padding: '4px 10px', fontSize: '0.8rem' }}
                           >
-                            Approve
+                            💬 Chat
                           </button>
+                        )}
+                        {booking.status === 'pending' && (
+                          <>
+                            <button 
+                              onClick={() => handleBookingAction(booking._id, 'approved')} 
+                              className="btn btn-secondary" 
+                              style={styles.actionBtn}
+                            >
+                              Approve
+                            </button>
+                            <button 
+                              onClick={() => handleBookingAction(booking._id, 'rejected')} 
+                              className="btn btn-danger" 
+                              style={styles.actionBtn}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {booking.status === 'approved' && (
                           <button 
-                            onClick={() => handleBookingAction(booking._id, 'rejected')} 
-                            className="btn btn-danger" 
-                            style={styles.actionBtn}
+                            onClick={() => handleBookingAction(booking._id, 'completed')} 
+                            className="btn btn-outline" 
+                            style={{ ...styles.actionBtn, color: 'var(--success)', borderColor: 'var(--success)' }}
                           >
-                            Reject
+                            Complete
                           </button>
-                        </div>
-                      )}
-                      {booking.status === 'approved' && (
-                        <button 
-                          onClick={() => handleBookingAction(booking._id, 'completed')} 
-                          className="btn btn-outline" 
-                          style={{ ...styles.actionBtn, color: 'var(--success)', borderColor: 'var(--success)' }}
-                        >
-                          Complete
-                        </button>
-                      )}
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -300,6 +351,47 @@ const MentorDashboard = () => {
                 <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '12px', fontSize: '0.85rem' }}>
                   <div style={{ color: 'var(--text-secondary)' }}>Duration: <strong style={{ color: 'var(--text-primary)' }}>{sess.duration}</strong></div>
                   <div style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>Slots: <strong style={{ color: 'var(--text-primary)' }}>{sess.slots?.join(', ')}</strong></div>
+                </div>
+
+                <button
+                  onClick={() => handleDeleteSession(sess._id)}
+                  className="btn btn-danger"
+                  style={{ marginTop: '16px', width: '100%', fontSize: '0.8rem', padding: '8px' }}
+                >
+                  🗑 Remove Session
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Reviews Received Section */}
+      <section style={{ marginBottom: '50px' }}>
+        <h2 style={styles.sectionTitle}>Reviews Received ({receivedReviews.length})</h2>
+        {receivedReviews.length === 0 ? (
+          <div className="glass-panel" style={styles.emptyState}>
+            <p>No reviews received yet. Complete sessions to receive learner reviews.</p>
+          </div>
+        ) : (
+          <div className="grid-3">
+            {receivedReviews.map((rev) => (
+              <div key={rev._id} className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.95rem' }}>
+                    {rev.reviewer?.name || 'Anonymous'}
+                  </div>
+                  <div style={{ display: 'flex', gap: '2px' }}>
+                    {[1,2,3,4,5].map(star => (
+                      <span key={star} style={{ color: star <= rev.rating ? '#f59e0b' : '#d1d5db', fontSize: '1rem' }}>★</span>
+                    ))}
+                  </div>
+                </div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.5', margin: 0, fontStyle: 'italic' }}>
+                  "{rev.comment}"
+                </p>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 'auto' }}>
+                  {new Date(rev.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                 </div>
               </div>
             ))}
@@ -434,6 +526,14 @@ const MentorDashboard = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Live Chat Modal */}
+      {chatRecipient && (
+        <LiveChatModal 
+          recipient={chatRecipient} 
+          onClose={() => setChatRecipient(null)} 
+        />
       )}
     </div>
   );

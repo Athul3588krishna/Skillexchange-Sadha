@@ -225,7 +225,7 @@ const Home = () => {
 
                   <div style={styles.sessFooter}>
                     <span style={styles.duration}>⏱ {sess.duration}</span>
-                    <Link to={`/sessions`} className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '8px 16px' }}>
+                    <Link to={`/sessions?search=${encodeURIComponent(sess.title)}`} className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '8px 16px' }}>
                       Book Session
                     </Link>
                   </div>

@@ -230,6 +230,45 @@ exports.createReview = async (req, res) => {
   }
 };
 
+// @desc    Get all reviews submitted by the current user
+// @route   GET /api/bookings/my-reviews
+// @access  Private
+exports.getMyReviews = async (req, res) => {
+  try {
+    const reviews = await Review.find({ reviewer: req.user._id })
+      .select('booking rating createdAt')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: reviews
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get all reviews received by the current user (as mentor/reviewee)
+// @route   GET /api/bookings/mentor-reviews
+// @access  Private
+exports.getMentorReviews = async (req, res) => {
+  try {
+    const reviews = await Review.find({ reviewee: req.user._id })
+      .populate('reviewer', 'name role')
+      .populate('booking', 'scheduledTime')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: reviews
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ==========================================
 // SKILL EXCHANGE REQUESTS CONTROLLERS
 // ==========================================

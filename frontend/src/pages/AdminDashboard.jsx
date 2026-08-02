@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import Spinner from '../components/Spinner';
 
 const AdminDashboard = () => {
   const { authFetch } = useAuth();
+  const toast = useToast();
   
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [pendingMentors, setPendingMentors] = useState([]);
   const [categories, setCategories] = useState([]);
   const [records, setRecords] = useState({ bookings: [], reviews: [] });
+  const [adminSessions, setAdminSessions] = useState([]);
   
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('stats');
@@ -45,6 +49,10 @@ const AdminDashboard = () => {
         const res = await authFetch('/api/admin/records');
         const data = await res.json();
         if (data.success) setRecords(data.data);
+      } else if (activeTab === 'sessions') {
+        const res = await authFetch('/api/admin/sessions');
+        const data = await res.json();
+        if (data.success) setAdminSessions(data.data);
       }
     } catch (err) {
       console.error('Error fetching admin data:', err);
@@ -61,10 +69,10 @@ const AdminDashboard = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Mentor application ${action === 'approve' ? 'approved' : 'rejected'} successfully!`);
+        toast.success(`Mentor application ${action === 'approve' ? 'approved ✓' : 'rejected ✕'} successfully.`);
         fetchAdminData();
       } else {
-        alert(data.message);
+        toast.error(data.message);
       }
     } catch (err) {
       console.error(err);
@@ -83,16 +91,16 @@ const AdminDashboard = () => {
       });
       const data = await res.json();
       if (data.success) {
-        setCatMessage('✅ Category added!');
+        toast.success('Category added successfully!');
         setNewCatName('');
         setNewCatDesc('');
         fetchAdminData();
       } else {
-        setCatMessage(`❌ Error: ${data.message}`);
+        toast.error(data.message || 'Failed to create category.');
       }
     } catch (err) {
       console.error(err);
-      setCatMessage('❌ Server error adding category.');
+      toast.error('Server error adding category.');
     }
   };
 
@@ -104,10 +112,10 @@ const AdminDashboard = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert('Category deleted successfully');
+        toast.success('Category deleted.');
         fetchAdminData();
       } else {
-        alert(data.message);
+        toast.error(data.message);
       }
     } catch (err) {
       console.error(err);
@@ -122,10 +130,10 @@ const AdminDashboard = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert('User removed');
+        toast.success('User removed from platform.');
         fetchAdminData();
       } else {
-        alert(data.message);
+        toast.error(data.message);
       }
     } catch (err) {
       console.error(err);
@@ -143,7 +151,7 @@ const AdminDashboard = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert('User role updated!');
+        toast.success(`User role updated to ${nextRole}.`);
         fetchAdminData();
       }
     } catch (err) {
@@ -185,6 +193,12 @@ const AdminDashboard = () => {
           📁 Skill Categories
         </button>
         <button 
+          style={{...styles.tabBtn, ...(activeTab === 'sessions' ? styles.activeTab : {})}}
+          onClick={() => setActiveTab('sessions')}
+        >
+          🗂 Sessions
+        </button>
+        <button 
           style={{...styles.tabBtn, ...(activeTab === 'records' ? styles.activeTab : {})}}
           onClick={() => setActiveTab('records')}
         >
@@ -193,8 +207,8 @@ const AdminDashboard = () => {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '60px', color: '#9ca3af' }}>
-          Loading admin section details...
+        <div style={{ padding: '60px 0' }}>
+          <Spinner text="Loading admin section..." />
         </div>
       ) : (
         <div style={styles.tabContent}>
