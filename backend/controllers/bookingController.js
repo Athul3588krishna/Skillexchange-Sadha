@@ -302,6 +302,14 @@ exports.sendExchangeRequest = async (req, res) => {
       status: 'pending'
     });
 
+    // Emit real-time Socket.io notification to receiver
+    if (req.io) {
+      req.io.to(`user_${receiverId}`).emit('new_exchange_request', {
+        message: `${req.user.name} sent you a P2P Skill Swap proposal (${offeredSkill} for ${requestedSkill})!`,
+        exchange: exchangeRequest
+      });
+    }
+
     res.status(201).json({
       success: true,
       data: exchangeRequest
@@ -356,6 +364,15 @@ exports.updateExchangeRequestStatus = async (req, res) => {
 
     request.status = status;
     await request.save();
+
+    // Emit real-time Socket.io notification to sender
+    if (req.io) {
+      req.io.to(`user_${request.sender}`).emit('exchange_status_updated', {
+        message: `Your Skill Swap request was ${status}!`,
+        status,
+        exchangeId: request._id
+      });
+    }
 
     res.json({
       success: true,

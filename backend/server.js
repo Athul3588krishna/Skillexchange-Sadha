@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const http = require('http');
+const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const seedDB = require('./config/seed');
 
@@ -14,6 +16,15 @@ connectDB().then(() => {
 });
 
 const app = express();
+const server = http.createServer(app);
+
+// Socket.io Server Setup
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  }
+});
 
 // Middleware
 app.use(cors({
@@ -23,6 +34,12 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Attach socket.io instance to req middleware for all routes
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
 
 // Mount Routes
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -46,28 +63,15 @@ app.use((err, req, res, next) => {
   });
 });
 
-const http = require('http');
-const { Server } = require('socket.io');
-
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-  }
-});
-
-// Attach socket io instance to req
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
-
+// Socket.io Event Handlers
 io.on('connection', (socket) => {
+  console.log(`⚡ Socket connected: ${socket.id}`);
+
   // User registers their room
   socket.on('join_user', (userId) => {
     if (userId) {
       socket.join(`user_${userId}`);
+      console.log(`User joined user room: user_${userId}`);
     }
   });
 
@@ -75,21 +79,23 @@ io.on('connection', (socket) => {
   socket.on('join_chat', (chatId) => {
     if (chatId) {
       socket.join(`chat_${chatId}`);
+      console.log(`Socket ${socket.id} joined chat room: chat_${chatId}`);
     }
   });
 
   // Live messaging
   socket.on('send_message', (data) => {
-    // Broadcast message to everyone in the chat room
+    console.log(`💬 Message in chat_${data.chatId}:`, data.text);
+    // Broadcast message to everyone in the chat room (including sender)
     io.to(`chat_${data.chatId}`).emit('receive_message', data);
-    // Also notify recipient if online
+    // Also notify recipient room if online
     if (data.receiverId) {
       io.to(`user_${data.receiverId}`).emit('new_chat_notification', data);
     }
   });
 
   socket.on('disconnect', () => {
-    // handle disconnect if needed
+    console.log(`⚡ Socket disconnected: ${socket.id}`);
   });
 });
 

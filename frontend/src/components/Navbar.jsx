@@ -71,8 +71,8 @@ const Navbar = () => {
               <Link to="/mentor/login" className="btn btn-outline" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
                 Become a Mentor
               </Link>
-              <Link to="/admin/login" style={{ ...styles.navLink, color: 'var(--danger)', fontSize: '0.85rem' }}>
-                Admin Portal
+              <Link to="/login" className="btn btn-primary" style={{ padding: '8px 18px', fontSize: '0.85rem' }}>
+                Get Started
               </Link>
             </div>
           )}

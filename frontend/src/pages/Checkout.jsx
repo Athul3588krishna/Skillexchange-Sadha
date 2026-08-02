@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Spinner from '../components/Spinner';
+import CreditCardMockup from '../components/CreditCardMockup';
 
 const Checkout = () => {
   const { id } = useParams();
@@ -15,11 +16,12 @@ const Checkout = () => {
   const [payLoading, setPayLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Mock Card Form States
+  // Interactive Card Form States
   const [cardNumber, setCardNumber] = useState('');
   const [cardHolder, setCardHolder] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
+  const [isFlipped, setIsFlipped] = useState(false);
 
   useEffect(() => {
     const fetchBookingDetails = async () => {
@@ -27,7 +29,6 @@ const Checkout = () => {
         const res = await authFetch('/api/bookings');
         const data = await res.json();
         if (data.success) {
-          // Find the specific booking in the user's booking list
           const found = data.data.find(b => b._id === id);
           if (found) {
             setBooking(found);
@@ -46,10 +47,30 @@ const Checkout = () => {
     fetchBookingDetails();
   }, [id]);
 
+  // Form input formatting handlers
+  const handleCardNumberChange = (e) => {
+    let val = e.target.value.replace(/\D/g, '').slice(0, 16);
+    let formatted = val.match(/.{1,4}/g)?.join(' ') || val;
+    setCardNumber(formatted);
+  };
+
+  const handleExpiryChange = (e) => {
+    let val = e.target.value.replace(/\D/g, '').slice(0, 4);
+    if (val.length >= 3) {
+      val = `${val.slice(0, 2)}/${val.slice(2)}`;
+    }
+    setExpiry(val);
+  };
+
+  const handleCvvChange = (e) => {
+    let val = e.target.value.replace(/\D/g, '').slice(0, 4);
+    setCvv(val);
+  };
+
   const handlePayment = async (e) => {
     e.preventDefault();
     if (!cardNumber || !cardHolder || !expiry || !cvv) {
-      setMessage('Please fill in all card details.');
+      setMessage('Please fill in all credit card details.');
       return;
     }
 
@@ -63,7 +84,7 @@ const Checkout = () => {
       const data = await res.json();
 
       if (data.success) {
-        toast.success('Payment successful! Your session is confirmed.');
+        toast.success('🎉 Simulated Payment Successful! Your session is confirmed.');
         navigate('/dashboard');
       } else {
         setMessage(data.message || 'Payment failed.');
@@ -84,7 +105,7 @@ const Checkout = () => {
     );
   }
 
-  // Already paid — show success state instead of form
+  // Already paid state
   if (booking && booking.paymentStatus === 'paid') {
     return (
       <div className="container" style={{ padding: '60px 24px', textAlign: 'center' }}>
@@ -92,22 +113,12 @@ const Checkout = () => {
           <div style={{ fontSize: '4rem' }}>🎉</div>
           <h2 style={{ color: 'var(--text-primary)', margin: 0 }}>Payment Confirmed!</h2>
           <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-            You have already paid for <strong>{booking.session?.title}</strong>.
+            You have successfully enrolled in <strong>{booking.session?.title}</strong>.
             Your booking is <span className="badge badge-success" style={{ verticalAlign: 'middle', fontSize: '0.85rem' }}>{booking.status}</span>.
           </p>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <Link to="/dashboard" className="btn btn-primary">Go to My Dashboard</Link>
-            <Link to="/sessions" className="btn btn-outline">Browse More Sessions</Link>
-          </div>
-          <div style={{ background: 'var(--bg-secondary)', borderRadius: '10px', padding: '16px 20px', width: '100%', textAlign: 'left' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-              <span>Transaction ID:</span>
-              <strong style={{ color: 'var(--primary)', fontFamily: 'monospace' }}>{booking.paymentId || 'N/A'}</strong>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              <span>Amount Paid:</span>
-              <strong style={{ color: 'var(--text-primary)' }}>${booking.amountPaid}</strong>
-            </div>
+            <Link to="/dashboard" className="btn btn-primary">Go to Student Dashboard</Link>
+            <Link to="/sessions" className="btn btn-outline">Browse More Classes</Link>
           </div>
         </div>
       </div>
@@ -159,15 +170,24 @@ const Checkout = () => {
           </div>
         </div>
 
-        {/* Right Side: Simulated Payment Form */}
+        {/* Right Side: Interactive Card & Payment Form */}
         <div className="glass-panel" style={{ padding: '30px' }}>
           <div style={styles.formHeader}>
-            <h3 style={{ color: 'var(--text-primary)' }}>Simulated Checkout</h3>
-            <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>Test Mode</span>
+            <h3 style={{ color: 'var(--text-primary)' }}>Simulated Credit Card Checkout</h3>
+            <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>Live Preview</span>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '20px' }}>
-            Enter any mock card details to process your simulated enrollment.
+            Type your payment details below to see the interactive card fill in real-time.
           </p>
+
+          {/* Interactive Credit Card Mockup */}
+          <CreditCardMockup 
+            cardNumber={cardNumber}
+            cardHolder={cardHolder}
+            expiry={expiry}
+            cvv={cvv}
+            isFlipped={isFlipped}
+          />
 
           {message && (
             <div style={{ marginBottom: '20px', fontSize: '0.9rem', color: '#ef4444' }}>
@@ -177,50 +197,58 @@ const Checkout = () => {
 
           <form onSubmit={handlePayment}>
             <div className="form-group">
-              <label className="form-label">Cardholder Name</label>
+              <label className="form-label">Cardholder Name *</label>
               <input 
                 type="text" 
                 className="form-control" 
-                placeholder="John Doe"
+                placeholder="Alex Morgan"
                 value={cardHolder}
                 onChange={(e) => setCardHolder(e.target.value)}
+                onFocus={() => setIsFlipped(false)}
                 required
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label">Card Number</label>
+              <label className="form-label">Card Number *</label>
               <input 
                 type="text" 
                 className="form-control" 
                 placeholder="4111 2222 3333 4444"
                 value={cardNumber}
-                onChange={(e) => setCardNumber(e.target.value)}
+                onChange={handleCardNumberChange}
+                onFocus={() => setIsFlipped(false)}
+                maxLength={19}
                 required
               />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
-                <label className="form-label">Expiry (MM/YY)</label>
+                <label className="form-label">Expiry (MM/YY) *</label>
                 <input 
                   type="text" 
                   className="form-control" 
                   placeholder="12/28"
                   value={expiry}
-                  onChange={(e) => setExpiry(e.target.value)}
+                  onChange={handleExpiryChange}
+                  onFocus={() => setIsFlipped(false)}
+                  maxLength={5}
                   required
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">CVV</label>
+                <label className="form-label">CVV / Security Code *</label>
                 <input 
                   type="password" 
                   className="form-control" 
                   placeholder="123"
                   value={cvv}
-                  onChange={(e) => setCvv(e.target.value)}
+                  onChange={handleCvvChange}
+                  onFocus={() => setIsFlipped(true)}
+                  onBlur={() => setIsFlipped(false)}
+                  maxLength={4}
                   required
                 />
               </div>

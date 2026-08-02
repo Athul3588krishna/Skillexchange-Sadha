@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useSocket } from '../context/SocketContext';
 import Spinner from '../components/Spinner';
 import LiveChatModal from '../components/LiveChatModal';
 
 const UserDashboard = () => {
   const { user, authFetch } = useAuth();
+  const { socket } = useSocket();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -27,32 +29,60 @@ const UserDashboard = () => {
     fetchDashboardData();
   }, []);
 
+  // Listen for real-time Skill Swap notifications
+  useEffect(() => {
+    if (socket) {
+      const handleNewExchange = (data) => {
+        if (toast && toast.info) toast.info(data.message || 'New Skill Swap request received!');
+        fetchDashboardData();
+      };
+
+      const handleExchangeUpdated = (data) => {
+        if (toast && toast.info) toast.info(data.message || 'Skill Swap status updated!');
+        fetchDashboardData();
+      };
+
+      socket.on('new_exchange_request', handleNewExchange);
+      socket.on('exchange_status_updated', handleExchangeUpdated);
+
+      return () => {
+        socket.off('new_exchange_request', handleNewExchange);
+        socket.off('exchange_status_updated', handleExchangeUpdated);
+      };
+    }
+  }, [socket, toast]);
+
   const fetchDashboardData = async () => {
     setLoading(true);
+    const safeParse = async (res) => {
+      try {
+        if (!res || !res.ok) return { success: false };
+        const txt = await res.text();
+        return txt ? JSON.parse(txt) : { success: false };
+      } catch { return { success: false }; }
+    };
+
     try {
       // Fetch bookings where user is learner
       const bookingRes = await authFetch('/api/bookings?as=learner');
-      const bookingData = await bookingRes.json();
-      if (bookingData.success) {
+      const bookingData = await safeParse(bookingRes);
+      if (bookingData.success && bookingData.data) {
         setBookings(bookingData.data);
       }
 
       // Fetch P2P exchange requests
       const exchangeRes = await authFetch('/api/exchanges');
-      const exchangeData = await exchangeRes.json();
-      if (exchangeData.success) {
+      const exchangeData = await safeParse(exchangeRes);
+      if (exchangeData.success && exchangeData.data) {
         setExchanges(exchangeData.data);
       }
 
       // Fetch admin records to determine already-reviewed bookings
-      // We check via a lightweight dedicated approach - fetch all reviews the user submitted
       const reviewRes = await authFetch('/api/bookings/my-reviews');
-      if (reviewRes.ok) {
-        const reviewData = await reviewRes.json();
-        if (reviewData.success && reviewData.data) {
-          const ids = new Set(reviewData.data.map(r => r.booking));
-          setReviewedBookingIds(ids);
-        }
+      const reviewData = await safeParse(reviewRes);
+      if (reviewData.success && reviewData.data) {
+        const ids = new Set(reviewData.data.map(r => r.booking));
+        setReviewedBookingIds(ids);
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -251,58 +281,71 @@ const UserDashboard = () => {
       </section>
 
       {/* Peer-to-Peer Skill Exchanges Section */}
-      {user.role === 'skilled_user' && (
-        <section>
-          <h2 style={styles.sectionTitle}>My P2P Skill Exchanges</h2>
-          {exchanges.length === 0 ? (
-            <div className="glass-panel" style={styles.emptyState}>
-              <p>No active skill exchange proposals found.</p>
-            </div>
-          ) : (
-            <div className="custom-table-wrapper">
-              <table className="custom-table">
-                <thead>
-                  <tr>
-                    <th>From</th>
-                    <th>To</th>
-                    <th>Requested Skill</th>
-                    <th>Offered Skill</th>
-                    <th>Message</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {exchanges.map((ex) => {
-                    const isSender = ex.sender?._id === user._id;
-                    return (
-                      <tr key={ex._id}>
-                        <td>
-                          {isSender ? <strong>Me</strong> : ex.sender?.name}
-                        </td>
-                        <td>
-                          {isSender ? ex.receiver?.name : <strong>Me</strong>}
-                        </td>
-                        <td>
-                          <span className="badge badge-primary">{ex.requestedSkill}</span>
-                        </td>
-                        <td>
-                          <span className="badge badge-secondary">{ex.offeredSkill}</span>
-                        </td>
-                        <td style={{ fontSize: '0.85rem', color: '#9ca3af', maxWidth: '250px' }}>
-                          "{ex.message}"
-                        </td>
-                        <td>
-                          <span className={`badge ${
-                            ex.status === 'approved' ? 'badge-success' :
-                            ex.status === 'rejected' ? 'badge-danger' : 'badge-warning'
-                          }`}>
-                            {ex.status}
-                          </span>
-                        </td>
-                        <td>
+      <section style={{ marginTop: '40px' }}>
+        <h2 style={styles.sectionTitle}>My P2P Skill Exchanges</h2>
+        {exchanges.length === 0 ? (
+          <div className="glass-panel" style={styles.emptyState}>
+            <p>No active skill exchange proposals found.</p>
+            <Link to="/sessions" className="btn btn-outline" style={{ marginTop: '12px', fontSize: '0.85rem' }}>
+              Explore Peer Sessions to Swap Skills
+            </Link>
+          </div>
+        ) : (
+          <div className="custom-table-wrapper">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Requested Skill</th>
+                  <th>Offered Skill</th>
+                  <th>Message</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exchanges.map((ex) => {
+                  const isSender = ex.sender?._id === user._id || ex.sender === user._id;
+                  const otherParty = isSender ? ex.receiver : ex.sender;
+                  return (
+                    <tr key={ex._id}>
+                      <td>
+                        {isSender ? <strong>Me</strong> : ex.sender?.name}
+                      </td>
+                      <td>
+                        {isSender ? ex.receiver?.name : <strong>Me</strong>}
+                      </td>
+                      <td>
+                        <span className="badge badge-primary">{ex.requestedSkill}</span>
+                      </td>
+                      <td>
+                        <span className="badge badge-secondary">{ex.offeredSkill}</span>
+                      </td>
+                      <td style={{ fontSize: '0.85rem', color: '#9ca3af', maxWidth: '250px' }}>
+                        "{ex.message}"
+                      </td>
+                      <td>
+                        <span className={`badge ${
+                          ex.status === 'approved' ? 'badge-success' :
+                          ex.status === 'rejected' ? 'badge-danger' : 'badge-warning'
+                        }`}>
+                          {ex.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          {otherParty && (
+                            <button 
+                              onClick={() => setChatRecipient(otherParty)} 
+                              className="btn btn-outline" 
+                              style={{ ...styles.actionBtn, padding: '4px 10px', fontSize: '0.8rem' }}
+                            >
+                              💬 Chat
+                            </button>
+                          )}
                           {!isSender && ex.status === 'pending' && (
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <>
                               <button 
                                 onClick={() => handleExchangeStatus(ex._id, 'approved')} 
                                 className="btn btn-secondary"
@@ -317,18 +360,18 @@ const UserDashboard = () => {
                               >
                                 Reject
                               </button>
-                            </div>
+                            </>
                           )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {/* Review Modal */}
       {reviewBooking && (

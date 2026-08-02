@@ -9,16 +9,24 @@ const LiveChatModal = ({ recipient, onClose }) => {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef(null);
 
+  // Extract string IDs cleanly
+  const recipientId = typeof recipient === 'object' ? (recipient._id || recipient.id) : recipient;
+  const userId = user ? (user._id || user.id) : null;
+  const recipientName = typeof recipient === 'object' ? recipient.name : 'Chat Partner';
+  const recipientRole = typeof recipient === 'object' ? recipient.role : null;
+
   // Generate a unique chat room ID for these two users
-  const chatId = user && recipient 
-    ? [user._id, recipient._id || recipient].sort().join('_')
+  const chatId = userId && recipientId 
+    ? [String(userId), String(recipientId)].sort().join('_')
     : null;
 
   useEffect(() => {
     if (socket && chatId) {
+      console.log(`💬 Joining Socket Chat Room: chat_${chatId}`);
       socket.emit('join_chat', chatId);
 
       const handleReceiveMessage = (data) => {
+        console.log('💬 Received message in chat modal:', data);
         setMessages((prev) => [...prev, data]);
       };
 
@@ -36,13 +44,13 @@ const LiveChatModal = ({ recipient, onClose }) => {
 
   const handleSend = (e) => {
     e.preventDefault();
-    if (!inputText.trim() || !socket || !chatId) return;
+    if (!inputText.trim() || !socket || !chatId || !user) return;
 
     const msgData = {
       chatId,
-      senderId: user._id,
-      senderName: user.name,
-      receiverId: recipient._id || recipient,
+      senderId: String(userId),
+      senderName: user.name || 'User',
+      receiverId: String(recipientId),
       text: inputText.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
@@ -61,9 +69,9 @@ const LiveChatModal = ({ recipient, onClose }) => {
           <div style={styles.recipientInfo}>
             <span style={styles.avatar}>💬</span>
             <div>
-              <h3 style={styles.name}>{recipient.name || 'Chat Partner'}</h3>
+              <h3 style={styles.name}>{recipientName}</h3>
               <p style={styles.role}>
-                {recipient.role ? recipient.role.replace('_', ' ') : 'Live Session Chat'}
+                {recipientRole ? recipientRole.replace('_', ' ') : 'Live Session Chat'}
               </p>
             </div>
           </div>
@@ -75,11 +83,11 @@ const LiveChatModal = ({ recipient, onClose }) => {
           {messages.length === 0 ? (
             <div style={styles.emptyState}>
               <p>💬 Start a real-time conversation!</p>
-              <span style={styles.subtext}>Messages are delivered instantly using Socket.io.</span>
+              <span style={styles.subtext}>Messages are delivered instantly via Socket.io.</span>
             </div>
           ) : (
             messages.map((msg, index) => {
-              const isMe = msg.senderId === user._id;
+              const isMe = String(msg.senderId) === String(userId);
               return (
                 <div 
                   key={index} 
@@ -116,6 +124,7 @@ const LiveChatModal = ({ recipient, onClose }) => {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             style={styles.input}
+            autoFocus
           />
           <button type="submit" className="btn btn-primary" style={styles.sendBtn}>
             Send

@@ -11,13 +11,23 @@ export const SocketProvider = ({ children }) => {
   const toast = useToast();
 
   useEffect(() => {
-    // In dev mode with Vite proxy, backend is at http://localhost:5000
-    const socketUrl = typeof window !== 'undefined' && window.location.port === '3000'
+    // Determine socket target endpoint
+    const targetUrl = (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.port === '3000'))
       ? 'http://localhost:5000'
       : window.location.origin;
 
-    const socketInstance = io(socketUrl, {
-      transports: ['websocket', 'polling']
+    const socketInstance = io(targetUrl, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000
+    });
+
+    socketInstance.on('connect', () => {
+      console.log('⚡ Socket.io connected to server:', socketInstance.id);
+    });
+
+    socketInstance.on('connect_error', (err) => {
+      console.warn('Socket connection error:', err.message);
     });
 
     setSocket(socketInstance);
@@ -29,22 +39,24 @@ export const SocketProvider = ({ children }) => {
 
   // Join user room whenever logged in user changes
   useEffect(() => {
-    if (socket && user && user._id) {
-      socket.emit('join_user', user._id);
+    if (socket && user) {
+      const uid = user._id || user.id;
+      if (uid) {
+        socket.emit('join_user', uid);
 
-      // Listen for mentor status updates live
-      const handleStatusUpdate = (data) => {
-        if (toast && toast.info) {
-          toast.info(data.message || `Status updated: ${data.status}`);
-        }
-        setUser((prev) => (prev ? { ...prev, mentorStatus: data.status, role: data.role } : prev));
-      };
+        const handleStatusUpdate = (data) => {
+          if (toast && toast.info) {
+            toast.info(data.message || `Status updated: ${data.status}`);
+          }
+          setUser((prev) => (prev ? { ...prev, mentorStatus: data.status, role: data.role } : prev));
+        };
 
-      socket.on('mentor_status_updated', handleStatusUpdate);
+        socket.on('mentor_status_updated', handleStatusUpdate);
 
-      return () => {
-        socket.off('mentor_status_updated', handleStatusUpdate);
-      };
+        return () => {
+          socket.off('mentor_status_updated', handleStatusUpdate);
+        };
+      }
     }
   }, [socket, user, setUser, toast]);
 

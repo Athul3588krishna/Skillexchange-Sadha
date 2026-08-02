@@ -51,10 +51,18 @@ const MentorDashboard = () => {
         authFetch('/api/bookings/mentor-reviews'),
       ]);
 
+      const safeJson = async (r) => {
+        try {
+          if (!r || !r.ok) return { success: false };
+          const txt = await r.text();
+          return txt ? JSON.parse(txt) : { success: false };
+        } catch { return { success: false }; }
+      };
+
       const [sessData, bookData, reviewData] = await Promise.all([
-        sessRes.json(),
-        bookRes.json(),
-        reviewRes.json(),
+        safeJson(sessRes),
+        safeJson(bookRes),
+        safeJson(reviewRes),
       ]);
 
       if (sessData.success) {
