@@ -54,6 +54,22 @@ const userSchema = new mongoose.Schema({
   reviewCount: {
     type: Number,
     default: 0
+  },
+  telegramChatId: {
+    type: String,
+    default: null
+  },
+  telegramUsername: {
+    type: String,
+    default: null
+  },
+  telegramConnectToken: {
+    type: String,
+    default: null
+  },
+  telegramNotificationsEnabled: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true

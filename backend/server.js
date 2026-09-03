@@ -6,6 +6,8 @@ const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const seedDB = require('./config/seed');
 
+const { initTelegramBot, forwardChatMessageToTelegram } = require('./services/telegramBot');
+
 // Load environment variables
 dotenv.config();
 
@@ -25,6 +27,9 @@ const io = new Server(server, {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
   }
 });
+
+// Initialize Telegram Bot Service
+initTelegramBot(io);
 
 // Middleware
 app.use(cors({
@@ -91,6 +96,14 @@ io.on('connection', (socket) => {
     // Also notify recipient room if online
     if (data.receiverId) {
       io.to(`user_${data.receiverId}`).emit('new_chat_notification', data);
+      
+      // Forward message to Telegram if recipient is linked
+      forwardChatMessageToTelegram(
+        data.receiverId,
+        { _id: data.senderId, name: data.senderName },
+        data.text,
+        data.chatId
+      );
     }
   });
 

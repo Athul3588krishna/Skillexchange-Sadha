@@ -26,8 +26,18 @@ const UserDashboard = () => {
   const [reviewedBookingIds, setReviewedBookingIds] = useState(new Set());
 
   useEffect(() => {
+    if (user) {
+      if (user.role === 'mentor') {
+        navigate('/mentor');
+        return;
+      }
+      if (user.role === 'admin') {
+        navigate('/admin');
+        return;
+      }
+    }
     fetchDashboardData();
-  }, []);
+  }, [user, navigate]);
 
   // Listen for real-time Skill Swap notifications
   useEffect(() => {
@@ -168,11 +178,34 @@ const UserDashboard = () => {
     return <Spinner fullPage text="Loading your student dashboard..." />;
   }
 
+  const enrolledCount = bookings.length;
+  const completedCount = bookings.filter(b => b.status === 'completed').length;
+  const pendingPaymentCount = bookings.filter(b => b.paymentStatus === 'pending' && b.session?.type === 'paid').length;
+
   return (
     <div className="container" style={{ padding: '40px 24px' }}>
       <div style={styles.header}>
         <h1 style={{ color: 'var(--text-primary)' }}>Learner Dashboard</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Track your bookings, pay for sessions, leave reviews, and manage your skill exchanges</p>
+        <p style={{ color: 'var(--text-secondary)' }}>Track your enrolled sessions, session payments, and mentor ratings</p>
+      </div>
+
+      {/* Student Stats Summary */}
+      <div className="grid-3" style={{ marginBottom: '40px' }}>
+        <div className="glass-panel" style={styles.statBox}>
+          <div style={styles.statTitle}>Enrolled Sessions</div>
+          <div style={styles.statValue}>{enrolledCount}</div>
+          <div style={styles.statLabel}>Total classes booked</div>
+        </div>
+        <div className="glass-panel" style={styles.statBox}>
+          <div style={styles.statTitle}>Completed Sessions</div>
+          <div style={{ ...styles.statValue, color: 'var(--success)' }}>{completedCount}</div>
+          <div style={styles.statLabel}>Finished learning classes</div>
+        </div>
+        <div className="glass-panel" style={styles.statBox}>
+          <div style={styles.statTitle}>Pending Payments</div>
+          <div style={{ ...styles.statValue, color: pendingPaymentCount > 0 ? '#fbbf24' : 'var(--text-primary)' }}>{pendingPaymentCount}</div>
+          <div style={styles.statLabel}>Awaiting checkout completion</div>
+        </div>
       </div>
 
       {/* Booked Sessions Section */}
@@ -280,98 +313,100 @@ const UserDashboard = () => {
         )}
       </section>
 
-      {/* Peer-to-Peer Skill Exchanges Section */}
-      <section style={{ marginTop: '40px' }}>
-        <h2 style={styles.sectionTitle}>My P2P Skill Exchanges</h2>
-        {exchanges.length === 0 ? (
-          <div className="glass-panel" style={styles.emptyState}>
-            <p>No active skill exchange proposals found.</p>
-            <Link to="/sessions" className="btn btn-outline" style={{ marginTop: '12px', fontSize: '0.85rem' }}>
-              Explore Peer Sessions to Swap Skills
-            </Link>
-          </div>
-        ) : (
-          <div className="custom-table-wrapper">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>From</th>
-                  <th>To</th>
-                  <th>Requested Skill</th>
-                  <th>Offered Skill</th>
-                  <th>Message</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {exchanges.map((ex) => {
-                  const isSender = ex.sender?._id === user._id || ex.sender === user._id;
-                  const otherParty = isSender ? ex.receiver : ex.sender;
-                  return (
-                    <tr key={ex._id}>
-                      <td>
-                        {isSender ? <strong>Me</strong> : ex.sender?.name}
-                      </td>
-                      <td>
-                        {isSender ? ex.receiver?.name : <strong>Me</strong>}
-                      </td>
-                      <td>
-                        <span className="badge badge-primary">{ex.requestedSkill}</span>
-                      </td>
-                      <td>
-                        <span className="badge badge-secondary">{ex.offeredSkill}</span>
-                      </td>
-                      <td style={{ fontSize: '0.85rem', color: '#9ca3af', maxWidth: '250px' }}>
-                        "{ex.message}"
-                      </td>
-                      <td>
-                        <span className={`badge ${
-                          ex.status === 'approved' ? 'badge-success' :
-                          ex.status === 'rejected' ? 'badge-danger' : 'badge-warning'
-                        }`}>
-                          {ex.status}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          {otherParty && (
-                            <button 
-                              onClick={() => setChatRecipient(otherParty)} 
-                              className="btn btn-outline" 
-                              style={{ ...styles.actionBtn, padding: '4px 10px', fontSize: '0.8rem' }}
-                            >
-                              💬 Chat
-                            </button>
-                          )}
-                          {!isSender && ex.status === 'pending' && (
-                            <>
+      {/* Peer-to-Peer Skill Exchanges Section (Only for skilled users or if user has active exchange requests) */}
+      {(user?.role === 'skilled_user' || exchanges.length > 0) && (
+        <section style={{ marginTop: '40px' }}>
+          <h2 style={styles.sectionTitle}>My P2P Skill Exchanges</h2>
+          {exchanges.length === 0 ? (
+            <div className="glass-panel" style={styles.emptyState}>
+              <p>No active skill exchange proposals found.</p>
+              <Link to="/sessions" className="btn btn-outline" style={{ marginTop: '12px', fontSize: '0.85rem' }}>
+                Explore Peer Sessions to Swap Skills
+              </Link>
+            </div>
+          ) : (
+            <div className="custom-table-wrapper">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Requested Skill</th>
+                    <th>Offered Skill</th>
+                    <th>Message</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exchanges.map((ex) => {
+                    const isSender = ex.sender?._id === user._id || ex.sender === user._id;
+                    const otherParty = isSender ? ex.receiver : ex.sender;
+                    return (
+                      <tr key={ex._id}>
+                        <td>
+                          {isSender ? <strong>Me</strong> : ex.sender?.name}
+                        </td>
+                        <td>
+                          {isSender ? ex.receiver?.name : <strong>Me</strong>}
+                        </td>
+                        <td>
+                          <span className="badge badge-primary">{ex.requestedSkill}</span>
+                        </td>
+                        <td>
+                          <span className="badge badge-secondary">{ex.offeredSkill}</span>
+                        </td>
+                        <td style={{ fontSize: '0.85rem', color: '#9ca3af', maxWidth: '250px' }}>
+                          "{ex.message}"
+                        </td>
+                        <td>
+                          <span className={`badge ${
+                            ex.status === 'approved' ? 'badge-success' :
+                            ex.status === 'rejected' ? 'badge-danger' : 'badge-warning'
+                          }`}>
+                            {ex.status}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            {otherParty && (
                               <button 
-                                onClick={() => handleExchangeStatus(ex._id, 'approved')} 
-                                className="btn btn-secondary"
-                                style={styles.actionBtn}
+                                onClick={() => setChatRecipient(otherParty)} 
+                                className="btn btn-outline" 
+                                style={{ ...styles.actionBtn, padding: '4px 10px', fontSize: '0.8rem' }}
                               >
-                                Accept
+                                💬 Chat
                               </button>
-                              <button 
-                                onClick={() => handleExchangeStatus(ex._id, 'rejected')} 
-                                className="btn btn-danger"
-                                style={styles.actionBtn}
-                              >
-                                Reject
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                            )}
+                            {!isSender && ex.status === 'pending' && (
+                              <>
+                                <button 
+                                  onClick={() => handleExchangeStatus(ex._id, 'approved')} 
+                                  className="btn btn-secondary"
+                                  style={styles.actionBtn}
+                                >
+                                  Accept
+                                </button>
+                                <button 
+                                  onClick={() => handleExchangeStatus(ex._id, 'rejected')} 
+                                  className="btn btn-danger"
+                                  style={styles.actionBtn}
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Review Modal */}
       {reviewBooking && (
@@ -445,6 +480,27 @@ const UserDashboard = () => {
 const styles = {
   header: {
     marginBottom: '32px'
+  },
+  statBox: {
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  statTitle: {
+    fontSize: '0.85rem',
+    color: 'var(--text-secondary)',
+    fontWeight: '600'
+  },
+  statValue: {
+    fontSize: '2.2rem',
+    fontWeight: '800',
+    color: 'var(--text-primary)',
+    fontFamily: 'Outfit, sans-serif',
+    margin: '6px 0'
+  },
+  statLabel: {
+    fontSize: '0.75rem',
+    color: 'var(--text-secondary)'
   },
   sectionTitle: {
     fontSize: '1.4rem',

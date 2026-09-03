@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const Profile = () => {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, authFetch, setUser } = useAuth();
   
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -12,6 +12,7 @@ const Profile = () => {
   const [certificateUrl, setCertificateUrl] = useState('');
   
   const [loading, setLoading] = useState(false);
+  const [telegramLoading, setTelegramLoading] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -24,6 +25,40 @@ const Profile = () => {
       setCertificateUrl(user.certificates?.[0] || '');
     }
   }, [user]);
+
+  const handleConnectTelegram = async () => {
+    setTelegramLoading(true);
+    try {
+      const res = await authFetch('/api/auth/telegram-token', { method: 'POST' });
+      const data = await res.json();
+      if (data.success && data.link) {
+        window.open(data.link, '_blank');
+      } else {
+        alert('Failed to generate Telegram connection link.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error connecting to Telegram.');
+    }
+    setTelegramLoading(false);
+  };
+
+  const handleUnlinkTelegram = async () => {
+    if (!window.confirm('Are you sure you want to disconnect Telegram from your account?')) return;
+    setTelegramLoading(true);
+    try {
+      const res = await authFetch('/api/auth/telegram-unlink', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        const meRes = await authFetch('/api/auth/me');
+        const meData = await meRes.json();
+        if (meData.success) setUser(meData.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setTelegramLoading(false);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,27 +125,77 @@ const Profile = () => {
             </div>
           )}
 
-          <div style={styles.skillsSummary}>
-            <h4 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Skills I Teach</h4>
-            {user.skillsToTeach?.length > 0 ? (
-              <div style={styles.tagWrapper}>
-                {user.skillsToTeach.map((s, i) => (
-                  <span key={i} className="badge badge-secondary">{s}</span>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>No teaching skills listed</p>
-            )}
+          {user.role !== 'admin' && (
+            <div style={styles.skillsSummary}>
+              {(user.role === 'mentor' || user.role === 'skilled_user') && (
+                <>
+                  <h4 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Skills I Teach</h4>
+                  {user.skillsToTeach?.length > 0 ? (
+                    <div style={styles.tagWrapper}>
+                      {user.skillsToTeach.map((s, i) => (
+                        <span key={i} className="badge badge-secondary">{s}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>No teaching skills listed</p>
+                  )}
+                </>
+              )}
 
-            <h4 style={{ color: 'var(--text-primary)', marginBottom: '8px', marginTop: '20px' }}>Skills I Want to Learn</h4>
-            {user.skillsToLearn?.length > 0 ? (
-              <div style={styles.tagWrapper}>
-                {user.skillsToLearn.map((s, i) => (
-                  <span key={i} className="badge badge-primary">{s}</span>
-                ))}
+              {(user.role === 'beginner' || user.role === 'skilled_user') && (
+                <>
+                  <h4 style={{ color: 'var(--text-primary)', marginBottom: '8px', marginTop: (user.role === 'skilled_user' ? '20px' : '0px') }}>Skills I Want to Learn</h4>
+                  {user.skillsToLearn?.length > 0 ? (
+                    <div style={styles.tagWrapper}>
+                      {user.skillsToLearn.map((s, i) => (
+                        <span key={i} className="badge badge-primary">{s}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>No learning skills listed</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Telegram Bot Integration Card */}
+          <div style={styles.telegramBox}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <span style={{ fontSize: '1.4rem' }}>✈️</span>
+              <div style={{ textAlign: 'left' }}>
+                <h4 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '0.95rem' }}>Telegram Bot Chat</h4>
+                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                  {user.telegramChatId ? 'Connected to Telegram' : 'Get live chat & session alerts'}
+                </p>
+              </div>
+            </div>
+
+            {user.telegramChatId ? (
+              <div>
+                <div style={styles.telegramStatusBadge}>
+                  ✅ Linked: <strong>@{user.telegramUsername || 'Telegram User'}</strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUnlinkTelegram}
+                  className="btn"
+                  style={styles.unlinkBtn}
+                  disabled={telegramLoading}
+                >
+                  Unlink Telegram
+                </button>
               </div>
             ) : (
-              <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>No learning skills listed</p>
+              <button
+                type="button"
+                onClick={handleConnectTelegram}
+                className="btn btn-primary"
+                style={{ width: '100%', fontSize: '0.85rem', padding: '8px 12px' }}
+                disabled={telegramLoading}
+              >
+                {telegramLoading ? 'Generating Link...' : '📱 Connect Telegram Bot'}
+              </button>
             )}
           </div>
         </div>
@@ -136,18 +221,20 @@ const Profile = () => {
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Account Role</label>
-              <select 
-                className="form-control" 
-                value={role} 
-                onChange={(e) => setRole(e.target.value)}
-              >
-                <option value="beginner">Beginner (Learner)</option>
-                <option value="skilled_user">Skilled User (Teach & Exchange)</option>
-                <option value="mentor">Professional Mentor (Paid Classes)</option>
-              </select>
-            </div>
+            {user.role !== 'admin' && (
+              <div className="form-group">
+                <label className="form-label">Account Role</label>
+                <select 
+                  className="form-control" 
+                  value={role} 
+                  onChange={(e) => setRole(e.target.value)}
+                >
+                  <option value="beginner">Beginner (Learner)</option>
+                  <option value="skilled_user">Skilled User (Teach & Exchange)</option>
+                  <option value="mentor">Professional Mentor (Paid Classes)</option>
+                </select>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">Biography</label>
@@ -160,29 +247,33 @@ const Profile = () => {
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Skills You Can Teach (Comma-separated)</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                value={skillsToTeach} 
-                onChange={(e) => setSkillsToTeach(e.target.value)} 
-                placeholder="e.g. Node.js, Graphic Design, Calculus"
-              />
-            </div>
+            {user.role !== 'admin' && (role === 'skilled_user' || role === 'mentor') && (
+              <div className="form-group">
+                <label className="form-label">Skills You Can Teach (Comma-separated)</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={skillsToTeach} 
+                  onChange={(e) => setSkillsToTeach(e.target.value)} 
+                  placeholder="e.g. Node.js, Graphic Design, Calculus"
+                />
+              </div>
+            )}
 
-            <div className="form-group">
-              <label className="form-label">Skills You Want to Learn (Comma-separated)</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                value={skillsToLearn} 
-                onChange={(e) => setSkillsToLearn(e.target.value)} 
-                placeholder="e.g. Spanish, Negotiation, Python"
-              />
-            </div>
+            {user.role !== 'admin' && (role === 'beginner' || role === 'skilled_user') && (
+              <div className="form-group">
+                <label className="form-label">Skills You Want to Learn (Comma-separated)</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={skillsToLearn} 
+                  onChange={(e) => setSkillsToLearn(e.target.value)} 
+                  placeholder="e.g. Spanish, Negotiation, Python"
+                />
+              </div>
+            )}
 
-            {role === 'mentor' && (
+            {user.role !== 'admin' && role === 'mentor' && (
               <div className="form-group" style={styles.certBlock}>
                 <label className="form-label" style={{ color: 'var(--primary)' }}>
                   Professional Certificate Verification
@@ -268,6 +359,34 @@ const styles = {
     color: 'var(--text-secondary)',
     marginTop: '8px',
     lineHeight: '1.4'
+  },
+  telegramBox: {
+    width: '100%',
+    marginTop: '24px',
+    padding: '18px',
+    background: 'var(--bg-secondary)',
+    borderRadius: '12px',
+    border: '1px solid var(--border-glass)',
+    textAlign: 'left'
+  },
+  telegramStatusBadge: {
+    fontSize: '0.85rem',
+    color: '#10b981',
+    background: 'rgba(16, 185, 129, 0.1)',
+    padding: '8px 12px',
+    borderRadius: '8px',
+    marginBottom: '10px',
+    border: '1px solid rgba(16, 185, 129, 0.2)'
+  },
+  unlinkBtn: {
+    width: '100%',
+    fontSize: '0.75rem',
+    color: '#ef4444',
+    background: 'rgba(239, 68, 68, 0.1)',
+    border: '1px solid rgba(239, 68, 68, 0.2)',
+    padding: '6px 12px',
+    borderRadius: '6px',
+    cursor: 'pointer'
   }
 };
 

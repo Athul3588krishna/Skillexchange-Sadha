@@ -95,6 +95,9 @@ exports.loginUser = async (req, res) => {
       certificates: user.certificates,
       ratings: user.ratings,
       reviewCount: user.reviewCount,
+      telegramChatId: user.telegramChatId,
+      telegramUsername: user.telegramUsername,
+      telegramNotificationsEnabled: user.telegramNotificationsEnabled,
       token: generateToken(user._id)
     });
   } catch (error) {
@@ -169,6 +172,9 @@ exports.updateProfile = async (req, res) => {
         certificates: updatedUser.certificates,
         ratings: updatedUser.ratings,
         reviewCount: updatedUser.reviewCount,
+        telegramChatId: updatedUser.telegramChatId,
+        telegramUsername: updatedUser.telegramUsername,
+        telegramNotificationsEnabled: updatedUser.telegramNotificationsEnabled,
         token: generateToken(updatedUser._id)
       });
     } else {
@@ -179,3 +185,79 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Generate a unique token for linking Telegram
+// @route   POST /api/auth/telegram-token
+// @access  Private
+exports.generateTelegramToken = async (req, res) => {
+  try {
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(16).toString('hex');
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.telegramConnectToken = token;
+    await user.save();
+
+    const botName = process.env.TELEGRAM_BOT_NAME || 'Nrz8bot';
+    const link = `https://t.me/${botName}?start=${token}`;
+
+    res.json({
+      success: true,
+      token,
+      botName,
+      link
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Unlink Telegram account
+// @route   POST /api/auth/telegram-unlink
+// @access  Private
+exports.unlinkTelegram = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.telegramChatId = null;
+    user.telegramUsername = null;
+    user.telegramConnectToken = null;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Telegram account unlinked successfully'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get all users for live chat discovery
+// @route   GET /api/auth/users
+// @access  Private
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({ _id: { $ne: req.user._id } })
+      .select('name email role bio ratings reviewCount skillsToTeach skillsToLearn')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: users
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+

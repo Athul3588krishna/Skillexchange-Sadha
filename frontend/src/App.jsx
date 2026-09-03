@@ -15,6 +15,7 @@ import Checkout from './pages/Checkout';
 import UserDashboard from './pages/UserDashboard';
 import MentorDashboard from './pages/MentorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import Messages from './pages/Messages';
 import NotFound from './pages/NotFound';
 
 // Helper component for authenticated routes
@@ -22,6 +23,16 @@ const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return <div style={styles.loading}>Verifying authentication session...</div>;
   return user ? children : <Navigate to="/login" />;
+};
+
+// Helper component for student/learner dashboard routes
+const StudentDashboardRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <div style={styles.loading}>Verifying authorization...</div>;
+  if (!user) return <Navigate to="/login" />;
+  if (user.role === 'admin') return <Navigate to="/admin" />;
+  if (user.role === 'mentor') return <Navigate to="/mentor" />;
+  return children;
 };
 
 // Helper component for admin-only routes
@@ -76,6 +87,14 @@ function AppContent() {
             
             {/* Authenticated Routes */}
             <Route 
+              path="/messages" 
+              element={
+                <PrivateRoute>
+                  <Messages />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
               path="/profile" 
               element={
                 <PrivateRoute>
@@ -94,17 +113,17 @@ function AppContent() {
             <Route 
               path="/dashboard" 
               element={
-                <PrivateRoute>
+                <StudentDashboardRoute>
                   <UserDashboard />
-                </PrivateRoute>
+                </StudentDashboardRoute>
               } 
             />
             <Route 
               path="/student/dashboard" 
               element={
-                <PrivateRoute>
+                <StudentDashboardRoute>
                   <UserDashboard />
-                </PrivateRoute>
+                </StudentDashboardRoute>
               } 
             />
 

@@ -3,6 +3,7 @@ const Session = require('../models/Session');
 const ExchangeRequest = require('../models/ExchangeRequest');
 const Review = require('../models/Review');
 const User = require('../models/User');
+const { sendTelegramNotification } = require('../services/telegramBot');
 
 // ==========================================
 // BOOKING CONTROLLERS
@@ -39,6 +40,13 @@ exports.createBooking = async (req, res) => {
       amountPaid: amount,
       status: 'pending' // pending approval from host
     });
+
+    // Send Telegram alert to host/mentor
+    sendTelegramNotification(
+      session.creator,
+      'New Session Booking!',
+      `👤 *${req.user.name}* has booked your session "*${session.title}*".\n📅 Scheduled for: ${new Date(scheduledTime).toLocaleString()}`
+    );
 
     res.status(201).json({
       success: true,
@@ -164,6 +172,14 @@ exports.updateBookingStatus = async (req, res) => {
 
     booking.status = status;
     await booking.save();
+
+    // Send Telegram alert to learner
+    const targetUserId = isMentor ? booking.learner : booking.mentor;
+    sendTelegramNotification(
+      targetUserId,
+      `Booking Status Updated: ${status.toUpperCase()}`,
+      `Your booking status has been updated to *${status}*.`
+    );
 
     res.json({
       success: true,
@@ -310,6 +326,16 @@ exports.sendExchangeRequest = async (req, res) => {
       });
     }
 
+    // Send Telegram alert to receiver
+    sendTelegramNotification(
+      receiverId,
+      'New Skill Swap Proposal! 🔄',
+      `👤 *${req.user.name}* wants to swap skills with you!\n\n` +
+      `• *Offered Skill:* ${offeredSkill}\n` +
+      `• *Requested Skill:* ${requestedSkill}\n` +
+      (message ? `• *Message:* "${message}"` : '')
+    );
+
     res.status(201).json({
       success: true,
       data: exchangeRequest
@@ -373,6 +399,13 @@ exports.updateExchangeRequestStatus = async (req, res) => {
         exchangeId: request._id
       });
     }
+
+    // Send Telegram alert to sender
+    sendTelegramNotification(
+      request.sender,
+      `Skill Swap Request ${status.toUpperCase()}! 🎉`,
+      `Your skill swap request (${request.offeredSkill} for ${request.requestedSkill}) was *${status}*!`
+    );
 
     res.json({
       success: true,

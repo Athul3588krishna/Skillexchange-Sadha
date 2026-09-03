@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 
-const LiveChatModal = ({ recipient, onClose }) => {
+const LiveChatModal = ({ recipient, onClose, embedded = false }) => {
   const { socket } = useSocket();
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
@@ -20,6 +20,25 @@ const LiveChatModal = ({ recipient, onClose }) => {
     ? [String(userId), String(recipientId)].sort().join('_')
     : null;
 
+  // Load chat history from localStorage on chatId change
+  useEffect(() => {
+    if (chatId) {
+      const saved = localStorage.getItem(`skillexchange_chat_${chatId}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setMessages(parsed);
+        } catch (e) {
+          setMessages([]);
+        }
+      } else {
+        setMessages([]);
+      }
+    } else {
+      setMessages([]);
+    }
+  }, [chatId]);
+
   useEffect(() => {
     if (socket && chatId) {
       console.log(`💬 Joining Socket Chat Room: chat_${chatId}`);
@@ -27,7 +46,17 @@ const LiveChatModal = ({ recipient, onClose }) => {
 
       const handleReceiveMessage = (data) => {
         console.log('💬 Received message in chat modal:', data);
-        setMessages((prev) => [...prev, data]);
+        setMessages((prev) => {
+          // Prevent duplicates
+          const isDuplicate = prev.some(
+            (m) => m.senderId === data.senderId && m.text === data.text && m.timestamp === data.timestamp
+          );
+          if (isDuplicate) return prev;
+
+          const updated = [...prev, data];
+          localStorage.setItem(`skillexchange_chat_${chatId}`, JSON.stringify(updated));
+          return updated;
+        });
       };
 
       socket.on('receive_message', handleReceiveMessage);
@@ -61,10 +90,10 @@ const LiveChatModal = ({ recipient, onClose }) => {
 
   if (!recipient) return null;
 
-  return (
-    <div style={styles.overlay}>
-      <div style={styles.modal} className="glass-panel">
-        {/* Header */}
+  const content = (
+    <div style={embedded ? styles.embeddedModal : styles.modal} className={embedded ? "" : "glass-panel"}>
+      {/* Header */}
+      {!embedded && (
         <div style={styles.header}>
           <div style={styles.recipientInfo}>
             <span style={styles.avatar}>💬</span>
@@ -77,6 +106,7 @@ const LiveChatModal = ({ recipient, onClose }) => {
           </div>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
+      )}
 
         {/* Message Container */}
         <div style={styles.messagesContainer}>
@@ -106,7 +136,12 @@ const LiveChatModal = ({ recipient, onClose }) => {
                   >
                     {!isMe && <div style={styles.senderLabel}>{msg.senderName}</div>}
                     <div>{msg.text}</div>
-                    <div style={styles.timestamp}>{msg.timestamp}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                      {msg.source === 'telegram' ? (
+                        <span style={{ fontSize: '0.65rem', color: '#38bdf8', opacity: 0.9 }}>✈️ Telegram</span>
+                      ) : <span />}
+                      <div style={styles.timestamp}>{msg.timestamp}</div>
+                    </div>
                   </div>
                 </div>
               );
@@ -131,6 +166,15 @@ const LiveChatModal = ({ recipient, onClose }) => {
           </button>
         </form>
       </div>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <div style={styles.overlay}>
+      {content}
     </div>
   );
 };
@@ -148,6 +192,14 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2000,
+  },
+  embeddedModal: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    padding: '0'
   },
   modal: {
     width: '100%',

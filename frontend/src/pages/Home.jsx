@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Home = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -61,6 +63,13 @@ const Home = () => {
     if (searchQuery.trim()) {
       navigate(`/sessions?search=${encodeURIComponent(searchQuery.trim())}`);
     }
+  };
+
+  const getDashboardLink = () => {
+    if (!user) return <Link to="/login" className="btn btn-secondary" style={{ width: '100%', marginTop: '16px', fontSize: '0.9rem' }}>Create Free Account</Link>;
+    if (user.role === 'admin') return <Link to="/admin" className="btn btn-secondary" style={{ width: '100%', marginTop: '16px', fontSize: '0.9rem' }}>Go to Admin Dashboard →</Link>;
+    if (user.role === 'mentor') return <Link to="/mentor" className="btn btn-secondary" style={{ width: '100%', marginTop: '16px', fontSize: '0.9rem' }}>Go to Mentor Dashboard →</Link>;
+    return <Link to="/dashboard" className="btn btn-secondary" style={{ width: '100%', marginTop: '16px', fontSize: '0.9rem' }}>Go to Student Dashboard →</Link>;
   };
 
   return (
@@ -139,9 +148,7 @@ const Home = () => {
               </div>
             </div>
 
-            <Link to="/login" className="btn btn-secondary" style={{ width: '100%', marginTop: '16px', fontSize: '0.9rem' }}>
-              Create Free Account
-            </Link>
+            {getDashboardLink()}
           </div>
         </div>
       </div>
@@ -236,23 +243,25 @@ const Home = () => {
         </div>
       </section>
 
-      {/* 4. BECOME A MENTOR RECRUITMENT BANNER */}
-      <section style={styles.bannerSection}>
-        <div className="container" style={styles.bannerContainer}>
-          <div style={styles.bannerText}>
-            <h2>Share Your Knowledge. <br />Become a Professional Mentor</h2>
-            <p>
-              Upload your degrees or certifications to unlock verified mentor status. You can post paid courses, accept bookings, verify certificates, and generate income.
-            </p>
-            <Link to="/login" className="btn btn-secondary">
-              Apply as Mentor
-            </Link>
+      {/* 4. BECOME A MENTOR RECRUITMENT BANNER (Only for non-mentors/non-admins) */}
+      {(!user || (user.role !== 'mentor' && user.role !== 'admin')) && (
+        <section style={styles.bannerSection}>
+          <div className="container" style={styles.bannerContainer}>
+            <div style={styles.bannerText}>
+              <h2>Share Your Knowledge. <br />Become a Professional Mentor</h2>
+              <p>
+                Upload your degrees or certifications to unlock verified mentor status. You can post paid courses, accept bookings, verify certificates, and generate income.
+              </p>
+              <Link to="/mentor/login" className="btn btn-secondary">
+                Apply as Mentor
+              </Link>
+            </div>
+            <div style={styles.bannerIllustration}>
+              🎓
+            </div>
           </div>
-          <div style={styles.bannerIllustration}>
-            🎓
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* 5. TESTIMONIALS CAROUSEL */}
       <section style={styles.section}>

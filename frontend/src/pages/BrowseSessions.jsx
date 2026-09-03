@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Spinner from '../components/Spinner';
+import LiveChatModal from '../components/LiveChatModal';
 
 const BrowseSessions = () => {
   const { user, authFetch } = useAuth();
@@ -13,6 +14,7 @@ const BrowseSessions = () => {
   const [categories, setCategories] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [chatRecipient, setChatRecipient] = useState(null);
 
   // Filter States - initialize from URL params
   const [search, setSearch] = useState(searchParams.get('search') || '');
@@ -269,24 +271,40 @@ const BrowseSessions = () => {
 
               <div style={styles.cardFooter}>
                 <span style={styles.duration}>⏱ {sess.duration}</span>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {sess.type === 'exchange' && (
+                {user?.role === 'admin' ? (
+                  <span className="badge badge-secondary" style={{ fontSize: '0.8rem' }}>
+                    Admin View
+                  </span>
+                ) : (
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    {sess.creator && user && sess.creator._id !== user._id && (
+                      <button 
+                        onClick={() => setChatRecipient(sess.creator)} 
+                        className="btn btn-outline"
+                        style={{ fontSize: '0.8rem', padding: '6px 10px', borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                        title="Start direct live chat"
+                      >
+                        💬 Chat
+                      </button>
+                    )}
+                    {sess.type === 'exchange' && (
+                      <button 
+                        onClick={() => handleOpenExchange(sess.creator)} 
+                        className="btn btn-outline"
+                        style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                      >
+                        P2P Swap
+                      </button>
+                    )}
                     <button 
-                      onClick={() => handleOpenExchange(sess.creator)} 
-                      className="btn btn-outline"
-                      style={{ fontSize: '0.85rem', padding: '8px 12px' }}
+                      onClick={() => handleOpenBooking(sess)} 
+                      className="btn btn-primary"
+                      style={{ fontSize: '0.8rem', padding: '6px 12px' }}
                     >
-                      P2P Swap
+                      Book Now
                     </button>
-                  )}
-                  <button 
-                    onClick={() => handleOpenBooking(sess)} 
-                    className="btn btn-primary"
-                    style={{ fontSize: '0.85rem', padding: '8px 16px' }}
-                  >
-                    Book Now
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -422,6 +440,14 @@ const BrowseSessions = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Live Chat Modal */}
+      {chatRecipient && (
+        <LiveChatModal 
+          recipient={chatRecipient} 
+          onClose={() => setChatRecipient(null)} 
+        />
       )}
     </div>
   );

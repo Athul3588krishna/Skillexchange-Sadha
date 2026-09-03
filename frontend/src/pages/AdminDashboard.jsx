@@ -159,6 +159,22 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleDeleteAdminSession = async (sessionId) => {
+    if (!window.confirm('Are you sure you want to delete this session?')) return;
+    try {
+      const res = await authFetch(`/api/admin/sessions/${sessionId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Session deleted successfully.');
+        fetchAdminData();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="container" style={{ padding: '40px 24px' }}>
       <div style={styles.header}>
@@ -438,6 +454,63 @@ const AdminDashboard = () => {
                   </button>
                 </form>
               </div>
+            </div>
+          )}
+
+          {/* SESSIONS MANAGEMENT TAB */}
+          {activeTab === 'sessions' && (
+            <div>
+              <h2 style={styles.tabTitle}>All Platform Sessions</h2>
+              {adminSessions.length === 0 ? (
+                <div className="glass-panel" style={styles.emptyState}>
+                  <p>No active sessions listed on the platform.</p>
+                </div>
+              ) : (
+                <div className="custom-table-wrapper">
+                  <table className="custom-table">
+                    <thead>
+                      <tr>
+                        <th>Title</th>
+                        <th>Host / Creator</th>
+                        <th>Category</th>
+                        <th>Type</th>
+                        <th>Price</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminSessions.map((s) => (
+                        <tr key={s._id}>
+                          <td>
+                            <strong>{s.title}</strong>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{s.description?.substring(0, 70)}...</div>
+                          </td>
+                          <td>
+                            <div>{s.creator?.name || 'N/A'}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{s.creator?.email}</div>
+                          </td>
+                          <td>{s.category?.name || 'Uncategorized'}</td>
+                          <td>
+                            <span className={`badge ${s.type === 'exchange' ? 'badge-secondary' : 'badge-primary'}`}>
+                              {s.type}
+                            </span>
+                          </td>
+                          <td>{s.type === 'exchange' ? 'Free Swap' : `$${s.price}`}</td>
+                          <td>
+                            <button 
+                              onClick={() => handleDeleteAdminSession(s._id)} 
+                              className="btn btn-danger" 
+                              style={styles.tableBtn}
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

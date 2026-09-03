@@ -39,7 +39,9 @@ const Navbar = () => {
         {/* Desktop Menu */}
         <div style={styles.menu}>
           <Link to="/" style={styles.navLink}>Home</Link>
-          <Link to="/sessions" style={styles.navLink}>Browse Sessions</Link>
+          {(!user || user.role === 'beginner' || user.role === 'skilled_user') && (
+            <Link to="/sessions" style={styles.navLink}>Browse Sessions</Link>
+          )}
 
           {(user && user.role === 'admin') && (
             <Link to="/admin" style={styles.navLinkAdmin}>Admin Dashboard</Link>
@@ -47,7 +49,7 @@ const Navbar = () => {
 
           {user ? (
             <>
-              {(user.role === 'mentor' || user.mentorStatus === 'pending' || user.mentorStatus === 'approved') && (
+              {user.role === 'mentor' && (
                 <Link to="/mentor" style={styles.navLinkMentor}>Mentor Dashboard</Link>
               )}
               {user.role === 'skilled_user' && (
@@ -56,6 +58,9 @@ const Navbar = () => {
               {(user.role === 'beginner' || user.role === 'skilled_user') && (
                 <Link to="/dashboard" style={styles.navLinkUser}>Student Dashboard</Link>
               )}
+              <Link to="/messages" style={{ ...styles.navLinkUser, color: 'var(--primary)', fontWeight: '600' }}>
+                💬 Live Chat
+              </Link>
               <Link to="/profile" style={styles.navLink}>Profile</Link>
 
               <div style={styles.userInfo}>
@@ -91,14 +96,16 @@ const Navbar = () => {
       {mobileMenuOpen && (
         <div style={styles.mobileDrawer} className="glass-panel">
           <Link to="/" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Home</Link>
-          <Link to="/sessions" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Browse Sessions</Link>
-          {((user && user.role === 'admin') || isHashAdmin) && (
+          {(!user || user.role === 'beginner' || user.role === 'skilled_user') && (
+            <Link to="/sessions" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Browse Sessions</Link>
+          )}
+          {(user && user.role === 'admin') && (
             <Link to="/admin" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Admin Dashboard</Link>
           )}
 
           {user ? (
             <>
-              {(user.role === 'mentor' || user.mentorStatus === 'pending' || user.mentorStatus === 'approved') && (
+              {user.role === 'mentor' && (
                 <Link to="/mentor" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Mentor Dashboard</Link>
               )}
               {user.role === 'skilled_user' && (
@@ -107,6 +114,7 @@ const Navbar = () => {
               {(user.role === 'beginner' || user.role === 'skilled_user') && (
                 <Link to="/dashboard" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Student Dashboard</Link>
               )}
+              <Link to="/messages" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>💬 Live Chat</Link>
               <Link to="/profile" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Profile</Link>
               <button 
                 onClick={() => { handleLogout(); setMobileMenuOpen(false); }} 
@@ -117,15 +125,13 @@ const Navbar = () => {
               </button>
             </>
           ) : (
-            !isHashAdmin && (
-              <>
-                <Link to="/student/login" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Student Sign In</Link>
-                <Link to="/mentor/login" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Become a Mentor</Link>
-                <Link to="/login" className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }} onClick={() => setMobileMenuOpen(false)}>
-                  Get Started
-                </Link>
-              </>
-            )
+            <>
+              <Link to="/student/login" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Student Sign In</Link>
+              <Link to="/mentor/login" style={styles.mobileLink} onClick={() => setMobileMenuOpen(false)}>Become a Mentor</Link>
+              <Link to="/login" className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }} onClick={() => setMobileMenuOpen(false)}>
+                Get Started
+              </Link>
+            </>
           )}
         </div>
       )}
