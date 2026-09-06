@@ -2,11 +2,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useSocket } from '../context/SocketContext';
 import Spinner from '../components/Spinner';
-import LiveChatModal from '../components/LiveChatModal';
 
 const BrowseSessions = () => {
   const { user, authFetch } = useAuth();
+  const { openChat } = useSocket();
   const toast = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -14,7 +15,6 @@ const BrowseSessions = () => {
   const [categories, setCategories] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [chatRecipient, setChatRecipient] = useState(null);
 
   // Filter States - initialize from URL params
   const [search, setSearch] = useState(searchParams.get('search') || '');
@@ -276,33 +276,31 @@ const BrowseSessions = () => {
                     Admin View
                   </span>
                 ) : (
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    {sess.creator && user && sess.creator._id !== user._id && (
-                      <button 
-                        onClick={() => setChatRecipient(sess.creator)} 
-                        className="btn btn-outline"
-                        style={{ fontSize: '0.8rem', padding: '6px 10px', borderColor: 'var(--primary)', color: 'var(--primary)' }}
-                        title="Start direct live chat"
-                      >
-                        💬 Chat
-                      </button>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {sess.creator && user && sess.creator._id === user._id ? (
+                      <span className="badge badge-primary" style={{ fontSize: '0.8rem' }}>
+                        Your Listing
+                      </span>
+                    ) : (
+                      <>
+                        {sess.type === 'exchange' && (
+                          <button 
+                            onClick={() => handleOpenExchange(sess.creator)} 
+                            className="btn btn-outline"
+                            style={{ fontSize: '0.85rem', padding: '6px 12px' }}
+                          >
+                            🔄 P2P Swap
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleOpenBooking(sess)} 
+                          className="btn btn-primary"
+                          style={{ fontSize: '0.85rem', padding: '6px 14px' }}
+                        >
+                          {sess.type === 'exchange' ? 'Book Slot' : 'Book Session'}
+                        </button>
+                      </>
                     )}
-                    {sess.type === 'exchange' && (
-                      <button 
-                        onClick={() => handleOpenExchange(sess.creator)} 
-                        className="btn btn-outline"
-                        style={{ fontSize: '0.8rem', padding: '6px 10px' }}
-                      >
-                        P2P Swap
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => handleOpenBooking(sess)} 
-                      className="btn btn-primary"
-                      style={{ fontSize: '0.8rem', padding: '6px 12px' }}
-                    >
-                      Book Now
-                    </button>
                   </div>
                 )}
               </div>
@@ -442,13 +440,6 @@ const BrowseSessions = () => {
         </div>
       )}
 
-      {/* Live Chat Modal */}
-      {chatRecipient && (
-        <LiveChatModal 
-          recipient={chatRecipient} 
-          onClose={() => setChatRecipient(null)} 
-        />
-      )}
     </div>
   );
 };

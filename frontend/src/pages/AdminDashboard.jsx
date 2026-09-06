@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useSocket } from '../context/SocketContext';
 import Spinner from '../components/Spinner';
 
 const AdminDashboard = () => {
   const { authFetch } = useAuth();
+  const { openChat } = useSocket();
   const toast = useToast();
   
   const [stats, setStats] = useState(null);
@@ -297,6 +299,14 @@ const AdminDashboard = () => {
                           <td>{new Date(m.createdAt).toLocaleDateString()}</td>
                           <td>
                             <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                onClick={() => openChat(m)}
+                                className="btn btn-outline"
+                                style={styles.tableBtn}
+                                title="Chat directly with applicant"
+                              >
+                                💬 Chat
+                              </button>
                               <button 
                                 onClick={() => handleVerifyMentor(m._id, 'approve')} 
                                 className="btn btn-secondary" 
@@ -353,6 +363,16 @@ const AdminDashboard = () => {
                         <td>{u.ratings > 0 ? `⭐️ ${u.ratings} (${u.reviewCount})` : 'N/A'}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '8px' }}>
+                            {u.role !== 'admin' && (
+                              <button
+                                onClick={() => openChat(u)}
+                                className="btn btn-outline"
+                                style={styles.tableBtn}
+                                title="Open 1-on-1 admin chat"
+                              >
+                                💬 Chat
+                              </button>
+                            )}
                             {u.role !== 'admin' && u.role !== 'mentor' && (
                               <button 
                                 onClick={() => handleChangeRole(u._id, u.role)} 

@@ -37,6 +37,36 @@ export const SocketProvider = ({ children }) => {
     };
   }, []);
 
+  // Global Persistent Chat State
+  const [activeChatUser, setActiveChatUser] = useState(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatMinimized, setIsChatMinimized] = useState(false);
+
+  const openChat = (recipientUser) => {
+    if (!recipientUser) return;
+    setActiveChatUser(recipientUser);
+    setIsChatOpen(true);
+    setIsChatMinimized(false);
+  };
+
+  const closeChat = () => {
+    setIsChatOpen(false);
+    setActiveChatUser(null);
+    setIsChatMinimized(false);
+  };
+
+  const minimizeChat = () => {
+    setIsChatMinimized(true);
+  };
+
+  const maximizeChat = () => {
+    setIsChatMinimized(false);
+  };
+
+  const toggleChatMinimize = () => {
+    setIsChatMinimized(prev => !prev);
+  };
+
   // Join user room whenever logged in user changes
   useEffect(() => {
     if (socket && user) {
@@ -51,17 +81,38 @@ export const SocketProvider = ({ children }) => {
           setUser((prev) => (prev ? { ...prev, mentorStatus: data.status, role: data.role } : prev));
         };
 
+        const handleNewChatNotification = (data) => {
+          // If chat with this user is not open/active, show notification
+          if (toast && toast.info) {
+            toast.info(`💬 New message from ${data.senderName}: "${data.text.slice(0, 30)}${data.text.length > 30 ? '...' : ''}"`);
+          }
+        };
+
         socket.on('mentor_status_updated', handleStatusUpdate);
+        socket.on('new_chat_notification', handleNewChatNotification);
 
         return () => {
           socket.off('mentor_status_updated', handleStatusUpdate);
+          socket.off('new_chat_notification', handleNewChatNotification);
         };
       }
     }
   }, [socket, user, setUser, toast]);
 
   return (
-    <SocketContext.Provider value={{ socket }}>
+    <SocketContext.Provider
+      value={{
+        socket,
+        activeChatUser,
+        isChatOpen,
+        isChatMinimized,
+        openChat,
+        closeChat,
+        minimizeChat,
+        maximizeChat,
+        toggleChatMinimize
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );

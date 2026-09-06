@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useSocket } from '../context/SocketContext';
 import Spinner from '../components/Spinner';
-import LiveChatModal from '../components/LiveChatModal';
 
 const MentorDashboard = () => {
   const { user, authFetch } = useAuth();
+  const { openChat } = useSocket();
   const toast = useToast();
   
   const [sessions, setSessions] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [receivedReviews, setReceivedReviews] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [chatRecipient, setChatRecipient] = useState(null);
   
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -287,7 +287,7 @@ const MentorDashboard = () => {
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         {booking.learner && (
                           <button 
-                            onClick={() => setChatRecipient(booking.learner)} 
+                            onClick={() => openChat(booking.learner)} 
                             className="btn btn-outline" 
                             style={{ ...styles.actionBtn, padding: '4px 10px', fontSize: '0.8rem' }}
                           >
@@ -536,13 +536,6 @@ const MentorDashboard = () => {
         </div>
       )}
 
-      {/* Live Chat Modal */}
-      {chatRecipient && (
-        <LiveChatModal 
-          recipient={chatRecipient} 
-          onClose={() => setChatRecipient(null)} 
-        />
-      )}
     </div>
   );
 };

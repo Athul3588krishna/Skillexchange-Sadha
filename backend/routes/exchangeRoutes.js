@@ -3,7 +3,8 @@ const router = express.Router();
 const {
   sendExchangeRequest,
   getMyExchangeRequests,
-  updateExchangeRequestStatus
+  updateExchangeRequestStatus,
+  createExchangeReview
 } = require('../controllers/bookingController');
 const { protect } = require('../middleware/auth');
 
@@ -13,5 +14,7 @@ router.route('/')
 
 router.route('/:id')
   .put(protect, updateExchangeRequestStatus);
+
+router.post('/:id/review', protect, createExchangeReview);
 
 module.exports = router;

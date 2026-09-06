@@ -2,7 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 
-const LiveChatModal = ({ recipient, onClose, embedded = false }) => {
+const LiveChatModal = ({ 
+  recipient, 
+  onClose, 
+  embedded = false, 
+  docked = false, 
+  isMinimized = false, 
+  onMinimize = null, 
+  onMaximize = null 
+}) => {
   const { socket } = useSocket();
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
@@ -90,8 +98,32 @@ const LiveChatModal = ({ recipient, onClose, embedded = false }) => {
 
   if (!recipient) return null;
 
+  // Minimized Floating Pill Badge
+  if (docked && isMinimized) {
+    return (
+      <div style={styles.minimizedPill} className="glass-panel" onClick={onMaximize} title="Click to expand 1-on-1 live chat">
+        <div style={styles.pillContent}>
+          <span style={{ fontSize: '1.2rem' }}>💬</span>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.85rem', lineHeight: '1.2' }}>
+              {recipientName}
+            </span>
+            <span style={{ fontSize: '0.7rem', color: '#10b981' }}>⚡ Live Socket Connected</span>
+          </div>
+        </div>
+        <button 
+          style={styles.closeBtn} 
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          title="Close Chat"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
   const content = (
-    <div style={embedded ? styles.embeddedModal : styles.modal} className={embedded ? "" : "glass-panel"}>
+    <div style={embedded ? styles.embeddedModal : docked ? styles.dockedModal : styles.modal} className={embedded ? "" : "glass-panel"}>
       {/* Header */}
       {!embedded && (
         <div style={styles.header}>
@@ -104,7 +136,14 @@ const LiveChatModal = ({ recipient, onClose, embedded = false }) => {
               </p>
             </div>
           </div>
-          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            {onMinimize && (
+              <button style={styles.actionBtn} onClick={onMinimize} title="Minimize Chat">
+                _
+              </button>
+            )}
+            <button style={styles.closeBtn} onClick={onClose} title="Close Chat">✕</button>
+          </div>
         </div>
       )}
 
@@ -136,10 +175,7 @@ const LiveChatModal = ({ recipient, onClose, embedded = false }) => {
                   >
                     {!isMe && <div style={styles.senderLabel}>{msg.senderName}</div>}
                     <div>{msg.text}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                      {msg.source === 'telegram' ? (
-                        <span style={{ fontSize: '0.65rem', color: '#38bdf8', opacity: 0.9 }}>✈️ Telegram</span>
-                      ) : <span />}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '4px' }}>
                       <div style={styles.timestamp}>{msg.timestamp}</div>
                     </div>
                   </div>
@@ -172,6 +208,14 @@ const LiveChatModal = ({ recipient, onClose, embedded = false }) => {
     return content;
   }
 
+  if (docked) {
+    return (
+      <div style={styles.dockedContainer}>
+        {content}
+      </div>
+    );
+  }
+
   return (
     <div style={styles.overlay}>
       {content}
@@ -180,6 +224,61 @@ const LiveChatModal = ({ recipient, onClose, embedded = false }) => {
 };
 
 const styles = {
+  dockedContainer: {
+    position: 'fixed',
+    bottom: '20px',
+    right: '20px',
+    zIndex: 2500,
+    width: '380px',
+    maxWidth: '90vw',
+    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.4)',
+    borderRadius: '16px',
+    overflow: 'hidden'
+  },
+  dockedModal: {
+    width: '100%',
+    height: '480px',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    border: '1px solid var(--border-glass)',
+    borderRadius: '16px',
+    padding: '0',
+    background: 'var(--bg-card)'
+  },
+  minimizedPill: {
+    position: 'fixed',
+    bottom: '20px',
+    right: '20px',
+    zIndex: 2500,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '16px',
+    padding: '12px 20px',
+    borderRadius: '50px',
+    border: '1px solid var(--primary)',
+    background: 'rgba(15, 23, 42, 0.95)',
+    backdropFilter: 'blur(12px)',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+    cursor: 'pointer',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+  },
+  pillContent: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px'
+  },
+  actionBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-primary)',
+    fontSize: '1.2rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    padding: '2px 8px',
+    lineHeight: '1'
+  },
   overlay: {
     position: 'fixed',
     top: 0,

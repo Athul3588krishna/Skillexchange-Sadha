@@ -3,7 +3,6 @@ const Session = require('../models/Session');
 const ExchangeRequest = require('../models/ExchangeRequest');
 const Review = require('../models/Review');
 const User = require('../models/User');
-const { sendTelegramNotification } = require('../services/telegramBot');
 
 // ==========================================
 // BOOKING CONTROLLERS
@@ -40,13 +39,6 @@ exports.createBooking = async (req, res) => {
       amountPaid: amount,
       status: 'pending' // pending approval from host
     });
-
-    // Send Telegram alert to host/mentor
-    sendTelegramNotification(
-      session.creator,
-      'New Session Booking!',
-      `👤 *${req.user.name}* has booked your session "*${session.title}*".\n📅 Scheduled for: ${new Date(scheduledTime).toLocaleString()}`
-    );
 
     res.status(201).json({
       success: true,
@@ -172,14 +164,6 @@ exports.updateBookingStatus = async (req, res) => {
 
     booking.status = status;
     await booking.save();
-
-    // Send Telegram alert to learner
-    const targetUserId = isMentor ? booking.learner : booking.mentor;
-    sendTelegramNotification(
-      targetUserId,
-      `Booking Status Updated: ${status.toUpperCase()}`,
-      `Your booking status has been updated to *${status}*.`
-    );
 
     res.json({
       success: true,
@@ -326,16 +310,6 @@ exports.sendExchangeRequest = async (req, res) => {
       });
     }
 
-    // Send Telegram alert to receiver
-    sendTelegramNotification(
-      receiverId,
-      'New Skill Swap Proposal! 🔄',
-      `👤 *${req.user.name}* wants to swap skills with you!\n\n` +
-      `• *Offered Skill:* ${offeredSkill}\n` +
-      `• *Requested Skill:* ${requestedSkill}\n` +
-      (message ? `• *Message:* "${message}"` : '')
-    );
-
     res.status(201).json({
       success: true,
       data: exchangeRequest
@@ -368,13 +342,13 @@ exports.getMyExchangeRequests = async (req, res) => {
   }
 };
 
-// @desc    Update exchange request status (Approve, Reject)
+// @desc    Update exchange request status (Approve, Reject, Complete)
 // @route   PUT /api/exchanges/:id
 // @access  Private
 exports.updateExchangeRequestStatus = async (req, res) => {
   try {
-    const { status } = req.body; // 'approved', 'rejected'
-    if (!['approved', 'rejected'].includes(status)) {
+    const { status } = req.body; // 'approved', 'rejected', 'completed'
+    if (!['approved', 'rejected', 'completed'].includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status update' });
     }
 
@@ -383,34 +357,94 @@ exports.updateExchangeRequestStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Exchange request not found' });
     }
 
-    // Verify current user is receiver
-    if (request.receiver.toString() !== req.user._id.toString()) {
-      return res.status(401).json({ success: false, message: 'Not authorized to update this exchange request' });
+    const isReceiver = request.receiver.toString() === req.user._id.toString();
+    const isSender = request.sender.toString() === req.user._id.toString();
+
+    if (status === 'approved' || status === 'rejected') {
+      if (!isReceiver && req.user.role !== 'admin') {
+        return res.status(401).json({ success: false, message: 'Only the proposal recipient can approve or reject' });
+      }
+    }
+
+    if (status === 'completed') {
+      if (!isReceiver && !isSender && req.user.role !== 'admin') {
+        return res.status(401).json({ success: false, message: 'Only swap participants can mark it completed' });
+      }
+      if (request.status !== 'approved') {
+        return res.status(400).json({ success: false, message: 'Only approved exchange proposals can be completed' });
+      }
     }
 
     request.status = status;
     await request.save();
 
-    // Emit real-time Socket.io notification to sender
+    // Emit real-time Socket.io notification to other party
+    const targetUserId = isReceiver ? request.sender : request.receiver;
     if (req.io) {
-      req.io.to(`user_${request.sender}`).emit('exchange_status_updated', {
-        message: `Your Skill Swap request was ${status}!`,
+      req.io.to(`user_${targetUserId}`).emit('exchange_status_updated', {
+        message: `Your Skill Swap request was updated to ${status}!`,
         status,
         exchangeId: request._id
       });
     }
 
-    // Send Telegram alert to sender
-    sendTelegramNotification(
-      request.sender,
-      `Skill Swap Request ${status.toUpperCase()}! 🎉`,
-      `Your skill swap request (${request.offeredSkill} for ${request.requestedSkill}) was *${status}*!`
-    );
-
     res.json({
       success: true,
       message: `Exchange request ${status}`,
       data: request
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Submit a review for a P2P Skill Exchange
+// @route   POST /api/exchanges/:id/review
+// @access  Private
+exports.createExchangeReview = async (req, res) => {
+  try {
+    const { rating, comment } = req.body;
+
+    if (!rating || !comment) {
+      return res.status(400).json({ success: false, message: 'Please provide rating and comment' });
+    }
+
+    const exchange = await ExchangeRequest.findById(req.params.id);
+    if (!exchange) {
+      return res.status(404).json({ success: false, message: 'Exchange request not found' });
+    }
+
+    const isSender = exchange.sender.toString() === req.user._id.toString();
+    const isReceiver = exchange.receiver.toString() === req.user._id.toString();
+
+    if (!isSender && !isReceiver) {
+      return res.status(401).json({ success: false, message: 'Only participants in this exchange can leave a review' });
+    }
+
+    if (exchange.status !== 'completed') {
+      return res.status(400).json({ success: false, message: 'You can only review completed skill exchanges' });
+    }
+
+    const revieweeId = isSender ? exchange.receiver : exchange.sender;
+
+    // Check if review already submitted by this reviewer for this exchange
+    const existingReview = await Review.findOne({ exchange: req.params.id, reviewer: req.user._id });
+    if (existingReview) {
+      return res.status(400).json({ success: false, message: 'You have already reviewed this skill exchange' });
+    }
+
+    const review = await Review.create({
+      exchange: req.params.id,
+      reviewer: req.user._id,
+      reviewee: revieweeId,
+      rating,
+      comment
+    });
+
+    res.status(201).json({
+      success: true,
+      data: review
     });
   } catch (error) {
     console.error(error);

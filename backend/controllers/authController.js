@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Booking = require('../models/Booking');
+const ExchangeRequest = require('../models/ExchangeRequest');
 
 // Generate Token
 const generateToken = (id) => {
@@ -95,9 +97,6 @@ exports.loginUser = async (req, res) => {
       certificates: user.certificates,
       ratings: user.ratings,
       reviewCount: user.reviewCount,
-      telegramChatId: user.telegramChatId,
-      telegramUsername: user.telegramUsername,
-      telegramNotificationsEnabled: user.telegramNotificationsEnabled,
       token: generateToken(user._id)
     });
   } catch (error) {
@@ -172,9 +171,6 @@ exports.updateProfile = async (req, res) => {
         certificates: updatedUser.certificates,
         ratings: updatedUser.ratings,
         reviewCount: updatedUser.reviewCount,
-        telegramChatId: updatedUser.telegramChatId,
-        telegramUsername: updatedUser.telegramUsername,
-        telegramNotificationsEnabled: updatedUser.telegramNotificationsEnabled,
         token: generateToken(updatedUser._id)
       });
     } else {
@@ -186,77 +182,112 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-// @desc    Generate a unique token for linking Telegram
-// @route   POST /api/auth/telegram-token
-// @access  Private
-exports.generateTelegramToken = async (req, res) => {
-  try {
-    const crypto = require('crypto');
-    const token = crypto.randomBytes(16).toString('hex');
-    const user = await User.findById(req.user._id);
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    user.telegramConnectToken = token;
-    await user.save();
-
-    const botName = process.env.TELEGRAM_BOT_NAME || 'Nrz8bot';
-    const link = `https://t.me/${botName}?start=${token}`;
-
-    res.json({
-      success: true,
-      token,
-      botName,
-      link
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// @desc    Unlink Telegram account
-// @route   POST /api/auth/telegram-unlink
-// @access  Private
-exports.unlinkTelegram = async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    user.telegramChatId = null;
-    user.telegramUsername = null;
-    user.telegramConnectToken = null;
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Telegram account unlinked successfully'
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// @desc    Get all users for live chat discovery
+// @desc    Get authorized contacts for live chat discovery
+//          Admin: Can chat with all users across the platform
+//          Mentors/Students: Can only chat with their booked session partners,
+//          exchange request partners, and Platform Support Admins
 // @route   GET /api/auth/users
 // @access  Private
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({ _id: { $ne: req.user._id } })
-      .select('name email role bio ratings reviewCount skillsToTeach skillsToLearn')
-      .sort({ createdAt: -1 });
+    const currentUserId = req.user._id;
+
+    // 1. If Admin, return all users across platform with role context
+    if (req.user.role === 'admin') {
+      const users = await User.find({ _id: { $ne: currentUserId } })
+        .select('name email role bio ratings reviewCount skillsToTeach skillsToLearn mentorStatus')
+        .sort({ createdAt: -1 });
+
+      const formatted = users.map(u => ({
+        ...u.toObject(),
+        contextReason: `Platform User (${u.role.replace('_', ' ')})`
+      }));
+
+      return res.json({
+        success: true,
+        data: formatted
+      });
+    }
+
+    // 2. For Mentors, Students, and Skilled Users:
+    // Only return appropriate scenario-based contacts:
+    // a) Booking partners (Student <-> Mentor with an active or past booking)
+    // b) Exchange partners (Sender <-> Receiver of Skill Swap)
+    // c) Platform Support Admin (so anyone can contact Admin for assistance)
+    const contactsMap = new Map();
+
+    // 2a. Platform Admins (Always available for support & moderation)
+    const adminUsers = await User.find({ role: 'admin', _id: { $ne: currentUserId } })
+      .select('name email role bio ratings reviewCount skillsToTeach skillsToLearn');
+    
+    for (const admin of adminUsers) {
+      contactsMap.set(String(admin._id), {
+        ...admin.toObject(),
+        contextReason: '🛡️ SkillExchange Platform Support & Admin'
+      });
+    }
+
+    // 2b. Bookings involving current user (as learner or mentor)
+    const bookings = await Booking.find({
+      $or: [{ learner: currentUserId }, { mentor: currentUserId }]
+    })
+      .populate('session', 'title type duration')
+      .populate('learner', 'name email role bio ratings reviewCount skillsToTeach skillsToLearn')
+      .populate('mentor', 'name email role bio ratings reviewCount skillsToTeach skillsToLearn')
+      .sort({ updatedAt: -1 });
+
+    for (const b of bookings) {
+      const isLearner = String(b.learner?._id) === String(currentUserId);
+      const partner = isLearner ? b.mentor : b.learner;
+      if (partner && String(partner._id) !== String(currentUserId)) {
+        const partnerId = String(partner._id);
+        const sessionTitle = b.session?.title || 'Mentorship Session';
+        const roleDesc = isLearner ? 'Mentor' : 'Learner';
+        const reason = `📚 ${roleDesc} • ${sessionTitle} (${b.scheduledTime})`;
+
+        if (!contactsMap.has(partnerId)) {
+          contactsMap.set(partnerId, {
+            ...partner.toObject(),
+            contextReason: reason,
+            bookingId: b._id
+          });
+        }
+      }
+    }
+
+    // 2c. Exchange Requests involving current user (as sender or receiver)
+    const exchanges = await ExchangeRequest.find({
+      $or: [{ sender: currentUserId }, { receiver: currentUserId }]
+    })
+      .populate('sender', 'name email role bio ratings reviewCount skillsToTeach skillsToLearn')
+      .populate('receiver', 'name email role bio ratings reviewCount skillsToTeach skillsToLearn')
+      .sort({ updatedAt: -1 });
+
+    for (const ex of exchanges) {
+      const isSender = String(ex.sender?._id) === String(currentUserId);
+      const partner = isSender ? ex.receiver : ex.sender;
+      if (partner && String(partner._id) !== String(currentUserId)) {
+        const partnerId = String(partner._id);
+        const reason = `🔄 Skill Swap: ${ex.offeredSkill} ⇄ ${ex.requestedSkill} (${ex.status})`;
+
+        if (!contactsMap.has(partnerId)) {
+          contactsMap.set(partnerId, {
+            ...partner.toObject(),
+            contextReason: reason,
+            exchangeId: ex._id
+          });
+        }
+      }
+    }
+
+    const contactsList = Array.from(contactsMap.values());
 
     res.json({
       success: true,
-      data: users
+      data: contactsList
     });
   } catch (error) {
-    console.error(error);
+    console.error('Error fetching scenario-based contacts:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

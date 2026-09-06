@@ -2,8 +2,9 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-import { SocketProvider } from './context/SocketContext';
+import { SocketProvider, useSocket } from './context/SocketContext';
 import Navbar from './components/Navbar';
+import LiveChatModal from './components/LiveChatModal';
 import Home from './pages/Home';
 import PortalSelector from './pages/PortalSelector';
 import StudentAuth from './pages/StudentAuth';
@@ -65,6 +66,23 @@ function HashRedirector() {
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
   return null;
+}
+
+function GlobalFloatingChat() {
+  const { isChatOpen, activeChatUser, closeChat, isChatMinimized, minimizeChat, maximizeChat } = useSocket();
+
+  if (!isChatOpen || !activeChatUser) return null;
+
+  return (
+    <LiveChatModal 
+      recipient={activeChatUser}
+      onClose={closeChat}
+      docked={true}
+      isMinimized={isChatMinimized}
+      onMinimize={minimizeChat}
+      onMaximize={maximizeChat}
+    />
+  );
 }
 
 function AppContent() {
@@ -165,6 +183,10 @@ function AppContent() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
+        
+        {/* Global Persistent Floating Live Chat */}
+        <GlobalFloatingChat />
+
         <footer style={styles.footer}>
           <div className="container" style={styles.footerContainer}>
             <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>

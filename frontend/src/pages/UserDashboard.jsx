@@ -4,26 +4,23 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useSocket } from '../context/SocketContext';
 import Spinner from '../components/Spinner';
-import LiveChatModal from '../components/LiveChatModal';
 
 const UserDashboard = () => {
   const { user, authFetch } = useAuth();
-  const { socket } = useSocket();
+  const { socket, openChat } = useSocket();
   const toast = useToast();
   const navigate = useNavigate();
 
   const [bookings, setBookings] = useState([]);
   const [exchanges, setExchanges] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [chatRecipient, setChatRecipient] = useState(null);
 
-  // Review Modal States
-  const [reviewBooking, setReviewBooking] = useState(null);
+  // Review & Feedback Modal States
+  const [reviewTarget, setReviewTarget] = useState(null); // { type: 'booking' | 'exchange', item, partnerName }
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
-  // Track which bookings have already been reviewed
-  const [reviewedBookingIds, setReviewedBookingIds] = useState(new Set());
+  const [reviewedItemIds, setReviewedItemIds] = useState(new Set());
 
   useEffect(() => {
     if (user) {
@@ -73,26 +70,23 @@ const UserDashboard = () => {
     };
 
     try {
-      // Fetch bookings where user is learner
-      const bookingRes = await authFetch('/api/bookings?as=learner');
-      const bookingData = await safeParse(bookingRes);
-      if (bookingData.success && bookingData.data) {
-        setBookings(bookingData.data);
+      const bookingsRes = await authFetch('/api/bookings?as=learner');
+      const bookingsData = await safeParse(bookingsRes);
+      if (bookingsData.success) {
+        setBookings(bookingsData.data);
       }
 
-      // Fetch P2P exchange requests
-      const exchangeRes = await authFetch('/api/exchanges');
-      const exchangeData = await safeParse(exchangeRes);
-      if (exchangeData.success && exchangeData.data) {
-        setExchanges(exchangeData.data);
+      const exchangesRes = await authFetch('/api/exchanges');
+      const exchangesData = await safeParse(exchangesRes);
+      if (exchangesData.success) {
+        setExchanges(exchangesData.data);
       }
 
-      // Fetch admin records to determine already-reviewed bookings
       const reviewRes = await authFetch('/api/bookings/my-reviews');
       const reviewData = await safeParse(reviewRes);
       if (reviewData.success && reviewData.data) {
-        const ids = new Set(reviewData.data.map(r => r.booking));
-        setReviewedBookingIds(ids);
+        const ids = new Set(reviewData.data.map(r => r.booking || r.exchange));
+        setReviewedItemIds(ids);
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -128,7 +122,7 @@ const UserDashboard = () => {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(`Exchange proposal ${newStatus}!`);
+        toast.success(`Skill exchange marked as ${newStatus}!`);
         fetchDashboardData();
       } else {
         toast.error(data.message);
@@ -139,29 +133,32 @@ const UserDashboard = () => {
     }
   };
 
-  const handleOpenReview = (booking) => {
-    setReviewBooking(booking);
+  const handleOpenReview = (targetType, item, partnerName) => {
+    setReviewTarget({ type: targetType, item, partnerName });
     setRating(5);
     setComment('');
   };
 
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
-    if (!reviewBooking) return;
+    if (!reviewTarget) return;
 
     setReviewLoading(true);
     try {
-      const res = await authFetch(`/api/bookings/${reviewBooking._id}/review`, {
+      const endpoint = reviewTarget.type === 'booking'
+        ? `/api/bookings/${reviewTarget.item._id}/review`
+        : `/api/exchanges/${reviewTarget.item._id}/review`;
+
+      const res = await authFetch(endpoint, {
         method: 'POST',
         body: JSON.stringify({ rating, comment })
       });
       const data = await res.json();
 
       if (data.success) {
-        toast.success('Thank you for your rating and review!');
-        // Mark this booking as reviewed so button disappears
-        setReviewedBookingIds(prev => new Set([...prev, reviewBooking._id]));
-        setReviewBooking(null);
+        toast.success('Thank you! Your rating and feedback review was submitted.');
+        setReviewedItemIds(prev => new Set([...prev, reviewTarget.item._id]));
+        setReviewTarget(null);
         fetchDashboardData();
       } else {
         toast.error(data.message || 'Failed to submit review.');
@@ -270,7 +267,7 @@ const UserDashboard = () => {
                       <div style={{ display: 'flex', gap: '8px' }}>
                         {booking.mentor && (
                           <button 
-                            onClick={() => setChatRecipient(booking.mentor)} 
+                            onClick={() => openChat(booking.mentor)} 
                             className="btn btn-outline" 
                             style={{ ...styles.actionBtn, padding: '4px 10px', fontSize: '0.8rem' }}
                           >
@@ -291,16 +288,16 @@ const UserDashboard = () => {
                             Mark Completed
                           </button>
                         )}
-                        {booking.status === 'completed' && !reviewedBookingIds.has(booking._id) && (
+                        {booking.status === 'completed' && !reviewedItemIds.has(booking._id) && (
                           <button 
-                            onClick={() => handleOpenReview(booking)} 
+                            onClick={() => handleOpenReview('booking', booking, booking.mentor?.name)} 
                             className="btn btn-primary"
                             style={styles.actionBtn}
                           >
                             Review Mentor
                           </button>
                         )}
-                        {booking.status === 'completed' && reviewedBookingIds.has(booking._id) && (
+                        {booking.status === 'completed' && reviewedItemIds.has(booking._id) && (
                           <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>✓ Reviewed</span>
                         )}
                       </div>
@@ -371,7 +368,7 @@ const UserDashboard = () => {
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             {otherParty && (
                               <button 
-                                onClick={() => setChatRecipient(otherParty)} 
+                                onClick={() => openChat(otherParty)} 
                                 className="btn btn-outline" 
                                 style={{ ...styles.actionBtn, padding: '4px 10px', fontSize: '0.8rem' }}
                               >
@@ -396,6 +393,27 @@ const UserDashboard = () => {
                                 </button>
                               </>
                             )}
+                            {ex.status === 'approved' && (
+                              <button 
+                                onClick={() => handleExchangeStatus(ex._id, 'completed')} 
+                                className="btn btn-outline"
+                                style={{ ...styles.actionBtn, borderColor: 'var(--success)', color: 'var(--success)' }}
+                              >
+                                Mark Completed
+                              </button>
+                            )}
+                            {ex.status === 'completed' && !reviewedItemIds.has(ex._id) && (
+                              <button 
+                                onClick={() => handleOpenReview('exchange', ex, otherParty?.name || 'Partner')} 
+                                className="btn btn-primary"
+                                style={styles.actionBtn}
+                              >
+                                Review Partner
+                              </button>
+                            )}
+                            {ex.status === 'completed' && reviewedItemIds.has(ex._id) && (
+                              <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>✓ Reviewed</span>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -408,37 +426,81 @@ const UserDashboard = () => {
         </section>
       )}
 
-      {/* Review Modal */}
-      {reviewBooking && (
+      {/* Enhanced Review & Feedback Modal */}
+      {reviewTarget && (
         <div style={styles.modalOverlay}>
           <div className="glass-panel" style={styles.modalContent}>
             <div style={styles.modalHeader}>
-              <h2>Review your session with {reviewBooking.mentor?.name}</h2>
-              <button style={styles.closeBtn} onClick={() => setReviewBooking(null)}>✕</button>
+              <h2 style={{ color: 'var(--text-primary)', margin: 0, fontSize: '1.2rem' }}>
+                ⭐ Review & Feedback for {reviewTarget.partnerName}
+              </h2>
+              <button style={styles.closeBtn} onClick={() => setReviewTarget(null)}>✕</button>
             </div>
             
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '20px' }}>
+              {reviewTarget.type === 'booking' 
+                ? `Mentorship Class: ${reviewTarget.item.session?.title || 'Learning Session'}` 
+                : `P2P Skill Swap: ${reviewTarget.item.offeredSkill} ⇄ ${reviewTarget.item.requestedSkill}`
+              }
+            </p>
+
             <form onSubmit={handleReviewSubmit}>
               <div className="form-group">
-                <label className="form-label">Rating (1 to 5 Stars)</label>
-                <select 
-                  className="form-control"
-                  value={rating}
-                  onChange={(e) => setRating(Number(e.target.value))}
-                >
-                  <option value="5">⭐️⭐️⭐️⭐️⭐️ (Excellent)</option>
-                  <option value="4">⭐️⭐️⭐️⭐️ (Good)</option>
-                  <option value="3">⭐️⭐️⭐️ (Average)</option>
-                  <option value="2">⭐️⭐️ (Poor)</option>
-                  <option value="1">⭐️ (Terrible)</option>
-                </select>
+                <label className="form-label">Star Rating</label>
+                <div style={{ display: 'flex', gap: '8px', fontSize: '1.8rem', cursor: 'pointer', marginBottom: '10px' }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <span 
+                      key={star}
+                      onClick={() => setRating(star)}
+                      style={{
+                        color: star <= rating ? '#fbbf24' : '#4b5563',
+                        transition: 'transform 0.15s ease',
+                        transform: star <= rating ? 'scale(1.15)' : 'scale(1)'
+                      }}
+                      title={`${star} Star${star > 1 ? 's' : ''}`}
+                    >
+                      ★
+                    </span>
+                  ))}
+                </div>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  {rating === 5 && '⭐️⭐️⭐️⭐️⭐️ (Excellent Experience)'}
+                  {rating === 4 && '⭐️⭐️⭐️⭐️ (Great & Helpful)'}
+                  {rating === 3 && '⭐️⭐️⭐️ (Good / Average)'}
+                  {rating === 2 && '⭐️⭐️ (Needs Improvement)'}
+                  {rating === 1 && '⭐️ (Unsatisfactory)'}
+                </span>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Review Comment</label>
+              {/* Quick Feedback Preset Tags */}
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label className="form-label" style={{ fontSize: '0.8rem' }}>Quick Preset Feedback</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {[
+                    "Clear & helpful explanations! 💡",
+                    "Punctual, friendly & supportive! 🙌",
+                    "Great practical skill swap experience! ✨",
+                    "Highly recommended mentor! 🏆"
+                  ].map((preset, idx) => (
+                    <button
+                      type="button"
+                      key={idx}
+                      onClick={() => setComment(prev => prev ? `${prev} ${preset}` : preset)}
+                      className="btn btn-outline"
+                      style={{ fontSize: '0.75rem', padding: '4px 8px', borderColor: 'var(--border-glass)' }}
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label className="form-label">Detailed Written Review / Feedback *</label>
                 <textarea 
                   className="form-control"
                   rows="4"
-                  placeholder="Tell others what you learned, what you liked about their teaching style, etc..."
+                  placeholder="Share your experience, feedback, what you learned, and suggestions..."
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   required
@@ -449,7 +511,7 @@ const UserDashboard = () => {
                 <button 
                   type="button" 
                   className="btn btn-outline" 
-                  onClick={() => setReviewBooking(null)}
+                  onClick={() => setReviewTarget(null)}
                 >
                   Cancel
                 </button>
@@ -458,7 +520,7 @@ const UserDashboard = () => {
                   className="btn btn-primary" 
                   disabled={reviewLoading}
                 >
-                  {reviewLoading ? 'Submitting...' : 'Post Review'}
+                  {reviewLoading ? 'Submitting...' : 'Submit Feedback'}
                 </button>
               </div>
             </form>
@@ -466,13 +528,6 @@ const UserDashboard = () => {
         </div>
       )}
 
-      {/* Live Chat Modal */}
-      {chatRecipient && (
-        <LiveChatModal 
-          recipient={chatRecipient} 
-          onClose={() => setChatRecipient(null)} 
-        />
-      )}
     </div>
   );
 };
